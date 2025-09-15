@@ -151,7 +151,6 @@ export default function DemoSection() {
                       <CheckCircle className="w-5 h-5 text-green-500" />
                       <span className="text-green-700 dark:text-green-400">Analysis Complete</span>
                     </div>
-                    <span className="font-bold text-green-700 dark:text-green-400">Risk Score: 35/100</span>
                   </div>
 
                   <div className="space-y-3">

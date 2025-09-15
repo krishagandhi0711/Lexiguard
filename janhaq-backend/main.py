@@ -9,7 +9,6 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import PyPDF2
 from docx import Document
-from pydantic import BaseModel  # Make sure this import is at the top if not already
 
 # --- 1. LOAD ENVIRONMENT VARIABLES ---
 load_dotenv()
@@ -138,8 +137,6 @@ Document: {document_text}
         "suggestions": suggestions
     }
 
-
-
 def extract_text_from_pdf(file) -> str:
     pdf_reader = PyPDF2.PdfReader(file)
     text = ""
@@ -163,6 +160,7 @@ async def root():
 async def analyze_document(request: DocumentRequest):
     result = analyze_text(request.text)
     result["file_type"] = "Text"
+    result["privacy_notice"] = "Your file was processed in-memory and deleted after extraction."
     return result
 
 @app.post("/analyze-file")
@@ -195,10 +193,10 @@ async def analyze_file(
 
     result = analyze_text(text_content)
     result["file_type"] = file_type
+    result["privacy_notice"] = "Your file was processed in-memory and deleted after extraction."
     return result
 
 # --- 8a. Q&A ROUTE ---
-
 class ChatRequest(BaseModel):
     message: str
     document_text: str
