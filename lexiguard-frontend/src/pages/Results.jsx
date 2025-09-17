@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge";
 import { FileText, AlertTriangle, CheckCircle } from "lucide-react";
 import { Button } from "../components/ui/button";
+import FairnessScore from "../components/FairnessScore";
+import NegotiationAssistant from "../components/NegotiationAssistant";
 
 const KEYWORDS_REGEX = /\b(agreement|contract|clause|liability|termination|penalty|indemnity|renewal)\b/gi;
 const ACTIONABLE_REGEX = /\b(\d+\s*(days?|weeks?|months?|years?)|due by|deadline|penalty|fine|termination|payment of \$?\d+|effective date|must|shall|obligated|required)\b/gi;
@@ -40,16 +42,42 @@ function highlightText(text) {
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
-  const analysis = location.state?.analysis;
+  const initialAnalysis = location.state?.analysis;
 
+  const [analysis, setAnalysis] = React.useState(initialAnalysis);
   const [chatMessages, setChatMessages] = React.useState([]);
   const [inputMessage, setInputMessage] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [loadingAnalysis, setLoadingAnalysis] = React.useState(false);
 
+  // Auto-scroll chat
   React.useEffect(() => {
     const chatContainer = document.getElementById("chat-container");
     if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
   }, [chatMessages]);
+
+  // Fetch extended analysis if fairness is missing
+  React.useEffect(() => {
+    if (initialAnalysis && !initialAnalysis.fairness_analysis) {
+      const fetchExtended = async () => {
+        setLoadingAnalysis(true);
+        try {
+          const response = await fetch("http://127.0.0.1:8000/analyze-extended", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: initialAnalysis.summary || initialAnalysis.text || "" }),
+          });
+          const data = await response.json();
+          setAnalysis(data);
+        } catch (error) {
+          console.error("Error fetching extended analysis:", error);
+        } finally {
+          setLoadingAnalysis(false);
+        }
+      };
+      fetchExtended();
+    }
+  }, [initialAnalysis]);
 
   const handleSend = async () => {
     if (!inputMessage.trim()) return;
@@ -64,7 +92,7 @@ export default function Results() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage,
-          document_text: analysis.document_text || analysis.summary || "",
+          document_text: analysis.summary || "",
         }),
       });
       const data = await response.json();
@@ -115,7 +143,7 @@ export default function Results() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Summary Card */}
+            {/* Summary */}
             <Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
@@ -128,7 +156,7 @@ export default function Results() {
               </CardContent>
             </Card>
 
-            {/* Risks Card */}
+            {/* Risks */}
             <Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
@@ -140,10 +168,7 @@ export default function Results() {
                 {analysis.risks && analysis.risks.length > 0 ? (
                   <ul className="space-y-4">
                     {analysis.risks.map((risk, idx) => (
-                      <li
-                        key={idx}
-                        className="border border-gray-700 rounded-lg p-4 bg-[#1E1E1E]"
-                      >
+                      <li key={idx} className="border border-gray-700 rounded-lg p-4 bg-[#1E1E1E]">
                         <p><strong>Clause:</strong> {risk.clause_text || "N/A"}</p>
                         <p><strong>Reason:</strong> {risk.risk_explanation || "No reason provided."}</p>
                         <p>
@@ -154,6 +179,9 @@ export default function Results() {
                             {risk.severity || "Unknown"}
                           </Badge>
                         </p>
+                        <div className="mt-3">
+                          <NegotiationAssistant riskyClause={risk.clause_text} />
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -163,7 +191,7 @@ export default function Results() {
               </CardContent>
             </Card>
 
-            {/* Suggestions Card */}
+            {/* Suggestions */}
             <Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none">
               <CardHeader>
                 <CardTitle>Suggested Actions</CardTitle>
@@ -184,6 +212,7 @@ export default function Results() {
 
           {/* Right Column */}
           <div className="space-y-6">
+            {/* Status */}
             <Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none">
               <CardHeader>
                 <CardTitle>Analysis Status</CardTitle>
@@ -214,35 +243,34 @@ export default function Results() {
               </CardContent>
             </Card>
 
+            {/* Fairness Score */}
+            {loadingAnalysis ? (
+              <p className="text-gray-300 italic">Loading fairness analysis...</p>
+            ) : (
+              analysis.fairness_analysis &&
+              analysis.fairness_analysis.length > 0 && (
+                <Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none">
+                  <CardHeader>
+                    <CardTitle>Fairness Score</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FairnessScore data={analysis.fairness_analysis} />
+                  </CardContent>
+                </Card>
+              )
+            )}
+
+            {/* Negotiation Assistant */}
             <Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none">
               <CardHeader>
-                <CardTitle>Key Responsibilities</CardTitle>
+                <CardTitle>Negotiation Assistant</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {analysis.risks && analysis.risks.length > 0 ? (
-                    analysis.risks.map((risk, idx) => (
-                      <div key={idx} className="flex items-center space-x-2">
-<CheckCircle className="flex-shrink-0 w-4 h-4 text-emerald-400" />
-  <span className="text-sm text-gray-200 leading-snug">
-    {risk.risk_explanation || "No responsibility specified."}
-  </span>
-</div>
-
-                    ))
-                  ) : (
-                    <div className="flex items-start space-x-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5" />
-                      <span className="text-sm text-gray-200">
-                        No specific responsibilities identified
-                      </span>
-                    </div>
-                  )}
-                </div>
+                <NegotiationAssistant riskyClause={analysis.summary || ""} />
               </CardContent>
             </Card>
 
-            {/* Chat Card */}
+            {/* Chat */}
             <Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none flex flex-col h-[500px]">
               <CardHeader>
                 <CardTitle>Chat with Document</CardTitle>
