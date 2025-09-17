@@ -17,7 +17,7 @@ load_dotenv()
 app = FastAPI(
     title="LexiGuard API",
     description="Analyzes legal documents (text, PDF, or DOCX) using Google's Gemini AI.",
-    version="1.2.0"
+    version="1.3.0"
 )
 
 # --- 3. ENABLE CORS ---
@@ -55,6 +55,16 @@ class DocumentRequest(BaseModel):
     class Config:
         schema_extra = {"example": {"text": "This is a sample rental agreement..."}}
 
+class ChatRequest(BaseModel):
+    message: str
+    document_text: str
+
+class NegotiationRequest(BaseModel):
+    clause: str
+
+class ExtendedAnalysisRequest(BaseModel):
+    text: str
+
 # --- 6. PROMPTS ---
 SUMMARY_PROMPT = """
 You are LexiGuard, an expert AI assistant that explains complex legal documents in simple terms.
@@ -74,6 +84,31 @@ You MUST respond ONLY with a valid JSON object. The structure of the JSON object
 {"risks": [{"clause_text": "...", "risk_explanation": "...", "severity": "..."}]}
 If you find no risks, you MUST return: {"risks": []}
 Do not add any text or formatting before or after the JSON object.
+"""
+
+NEGOTIATION_PROMPT = """
+You are LexiGuard, an AI that helps users negotiate risky clauses politely.
+Draft a short, professional, and polite email asking to revise or clarify the following clause:
+
+Clause:
+{clause}
+
+Do not include placeholders like [Company]. Just write a natural, ready-to-send email body.
+"""
+
+FAIRNESS_PROMPT = """
+You are LexiGuard, a fairness evaluator.
+Compare the following risky clause with a standard, balanced contract clause.
+Return a JSON object strictly in this format:
+{
+  "standard_clause": "...",
+  "risky_clause": "...",
+  "fairness_score": 0-100,
+  "explanation": "..."
+}
+
+Risky Clause:
+{clause}
 """
 
 # --- 7. HELPERS ---
@@ -151,7 +186,7 @@ def extract_text_from_docx(file) -> str:
         text += para.text + "\n"
     return text
 
-# --- 8. ROUTES ---
+# --- 8. ROUTES (existing ones) ---
 @app.get("/")
 async def root():
     return {"message": "LexiGuard API is running. Use POST /analyze-file or /analyze."}
@@ -196,11 +231,6 @@ async def analyze_file(
     result["privacy_notice"] = "Your file was processed in-memory and deleted after extraction."
     return result
 
-# --- 8a. Q&A ROUTE ---
-class ChatRequest(BaseModel):
-    message: str
-    document_text: str
-    
 @app.post("/chat")
 async def chat_with_document(request: ChatRequest):
     prompt = f"""
@@ -222,7 +252,53 @@ Respond concisely and clearly for a non-lawyer.
         answer = f"Error: {str(e)}"
     return {"reply": answer}
 
-# --- 9. ENTRY POINT ---
+# --- 9. NEW ROUTES ---
+@app.post("/draft-negotiation")
+async def draft_negotiation(request: NegotiationRequest):
+    """Drafts a polite negotiation email for a risky clause."""
+    prompt = NEGOTIATION_PROMPT.format(clause=request.clause)
+    try:
+        resp = model.generate_content([prompt])
+        email_text = getattr(resp, "text", "").strip() or "Could not generate email."
+    except Exception as e:
+        email_text = f"Error: {str(e)}"
+    return {"negotiation_email": email_text}
+
+@app.post("/analyze-extended")
+async def analyze_extended(request: ExtendedAnalysisRequest):
+    """Performs extended analysis with clause comparison and fairness scoring."""
+    base_result = analyze_text(request.text)
+
+    fairness_results = []
+    for risk in base_result.get("risks", []):
+        clause_text = risk.get("clause_text", "")
+        if not clause_text.strip():
+            continue
+        prompt = FAIRNESS_PROMPT.format(clause=clause_text)
+        try:
+            resp = model.generate_content([prompt])
+            fairness_json = (
+                resp.text.strip()
+                .replace("```json", "")
+                .replace("```", "")
+            )
+            parsed = json.loads(fairness_json)
+        except Exception as e:
+            parsed = {
+                "standard_clause": "",
+                "risky_clause": clause_text,
+                "fairness_score": 50,
+                "explanation": f"Error: {str(e)}"
+            }
+        fairness_results.append(parsed)
+
+        # Respect rate limits
+        time.sleep(2)
+
+    base_result["fairness_analysis"] = fairness_results
+    return base_result
+
+# --- 10. ENTRY POINT ---
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
