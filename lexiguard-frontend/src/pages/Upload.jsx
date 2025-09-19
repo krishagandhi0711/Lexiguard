@@ -38,8 +38,17 @@ export default function Upload() {
       body: formData,
     });
 
+    // Check if response is OK
+    if (!res.ok) {
+      const errorText = await res.text(); // Get error from backend
+      alert("Server error: " + errorText); // Show error to user
+      setLoading(false); // Stop loading spinner
+      return; // Exit function
+    }
 
-      const data = await res.json();
+    // Proceed normally
+    const data = await res.json();
+
       setLoading(false);
 
       if (data.error) {
