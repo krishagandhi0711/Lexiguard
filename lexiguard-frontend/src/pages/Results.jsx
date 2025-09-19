@@ -260,6 +260,34 @@ export default function Results() {
               )
             )}
 
+<Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none">
+  <CardHeader>
+    <CardTitle>Key Responsibilities</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <div className="space-y-3">
+      {analysis.risks && analysis.risks.length > 0 ? (
+        analysis.risks.map((risk, idx) => (
+          <div key={idx} className="flex items-center space-x-2">
+            <CheckCircle className="flex-shrink-0 w-4 h-4 text-emerald-400" />
+            <span className="text-sm text-gray-200 leading-snug">
+              {risk.risk_explanation || "No responsibility specified."}
+            </span>
+          </div>
+        ))
+      ) : (
+        <div className="flex items-start space-x-2">
+          <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5" />
+          <span className="text-sm text-gray-200">
+            No specific responsibilities identified
+          </span>
+        </div>
+      )}
+    </div>
+  </CardContent>
+</Card>
+
+
             {/* Negotiation Assistant */}
             <Card className="bg-[#064E3B]/90 backdrop-blur-md shadow-2xl border-none">
               <CardHeader>
