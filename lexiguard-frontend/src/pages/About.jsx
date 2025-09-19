@@ -2,6 +2,8 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Shield, Brain, Award, Linkedin } from "lucide-react";
 import krishaImg from "./krisha.jpg";
+import dhritiImg from "./dhriti_pic.jpg";
+import kavyaImg from "./kavya_pic.jpg";
 
 const teamMembers = [
   {
@@ -16,10 +18,19 @@ const teamMembers = [
     name: "Dhriti Gandhi",
     role: "B.Tech Pre-Final Year, Computer Science & Engineering",
     bio: "Student at The Maharaja Sayajirao University of Baroda",
-    image: "https://your-image-link-here.jpg",
+    image: dhritiImg, // local image import",
     linkedin: "https://www.linkedin.com/in/dhriti-gandhi",
     github: "https://github.com/dhriti-gandhi",
   },
+  {
+    name: "Kavya Patel",
+    role: "B.Tech Pre-Final Year, Computer Science & Engineering",
+    bio: "Student at The Maharaja Sayajirao University of Baroda",
+    image: kavyaImg, // local image import
+    linkedin: "https://www.linkedin.com/in/kavya-patel-802959278",
+    github: "https://github.com/K9Patel",
+  },
+
 ];
 
 const milestones = [
