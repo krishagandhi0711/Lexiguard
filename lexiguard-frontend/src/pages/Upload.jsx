@@ -33,10 +33,11 @@ export default function Upload() {
     }
 
     try {
-      const res = await fetch("http://localhost:8000/analyze-file", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/analyze-file`, {
+      method: "POST",
+      body: formData,
+    });
+
 
       const data = await res.json();
       setLoading(false);
