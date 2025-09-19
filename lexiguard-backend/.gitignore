@@ -227,3 +227,4 @@ janhaq-frontend/.next/
 *.env
 *.env.local
 .vercel
+.env
