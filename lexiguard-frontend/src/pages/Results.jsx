@@ -1058,8 +1058,11 @@ const handleLanguageChange = async (languageCode) => {
                 transition={{ delay: 0.6 }}
               >
                 <RoleAwareChatAgent 
-                  documentContext={documentAnalysis?.summary || 'Document analysis results'} 
                   analysisId={analysisId}
+                  redactedDocumentText={analysis?.redacted_text || analysis?.redacted_document_text || ''}
+                  height="500px"
+                  showTitle={true}
+                  className=""
                 />
               </motion.div>
               <Button
