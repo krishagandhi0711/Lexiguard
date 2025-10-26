@@ -84,55 +84,47 @@ model = None
 MODEL_NAME = None
 
 def initialize_gemini_model():
-    """Initialize Gemini model with dynamic model discovery"""
+    """Initialize Gemini model with fixed Gemini 2.5 Flash"""
     global model, MODEL_NAME
     
     try:
-        # First, list available models to find the correct one
-        logger.info("🔍 Discovering available Gemini models...")
-        available_models = []
+        # Use fixed Gemini 2.5 Flash model for consistent performance
+        MODEL_NAME = "models/gemini-2.5-flash"
+        logger.info(f"� Initializing fixed model: {MODEL_NAME}")
         
         try:
-            models = genai.list_models()
-            for m in models:
-                if 'generateContent' in m.supported_generation_methods:
-                    available_models.append(m.name)
-                    logger.info(f"   Available: {m.name}")
-        except Exception as list_error:
-            logger.warning(f"Could not list models: {list_error}")
-        
-        # Try different model names in order of preference
-        model_candidates = [
-            "gemini-1.5-flash",        # Most common format
-            "models/gemini-1.5-flash", # Full path format
-            "gemini-1.5-pro",          # Alternative model
-            "models/gemini-1.5-pro",   # Full path alternative
-            "gemini-pro",              # Fallback
-            "models/gemini-pro"        # Full path fallback
-        ]
-        
-        # If we found available models, prefer those
-        if available_models:
-            model_candidates = available_models + model_candidates
-        
-        for candidate in model_candidates:
-            try:
-                logger.info(f"🧪 Trying model: {candidate}")
-                test_model = genai.GenerativeModel(candidate, safety_settings=safety_settings)
+            # Initialize Gemini 2.5 Flash directly
+            test_model = genai.GenerativeModel(MODEL_NAME, safety_settings=safety_settings)
+            
+            # Test the model with a simple prompt
+            test_response = test_model.generate_content("Hello! Please respond with 'Working'.")
+            
+            if test_response and test_response.text:
+                model = test_model
+                logger.info(f"✅ Gemini 2.5 Flash initialized successfully: {MODEL_NAME}")
+                logger.info(f"✅ Test response: {test_response.text[:50]}...")
+                return True
+            else:
+                raise Exception("Model test failed - no response received")
                 
-                # Test the model with a simple prompt
+        except Exception as flash_error:
+            logger.warning(f"❌ Gemini 2.5 Flash failed: {flash_error}")
+            
+            # Fallback to models/ prefix format if needed
+            try:
+                MODEL_NAME = "models/gemini-flash-latest"
+                logger.info(f"🔄 Trying fallback format: {MODEL_NAME}")
+                test_model = genai.GenerativeModel(MODEL_NAME, safety_settings=safety_settings)
                 test_response = test_model.generate_content("Hello! Please respond with 'Working'.")
                 
                 if test_response and test_response.text:
                     model = test_model
-                    MODEL_NAME = candidate
-                    logger.info(f"✅ Gemini model initialized successfully: {MODEL_NAME}")
-                    logger.info(f"✅ Test response: {test_response.text[:50]}...")
+                    logger.info(f"✅ Gemini 2.5 Flash (fallback format) initialized: {MODEL_NAME}")
                     return True
                     
-            except Exception as test_error:
-                logger.warning(f"❌ Model {candidate} failed: {test_error}")
-                continue
+            except Exception as fallback_error:
+                logger.error(f"❌ Both Gemini 2.5 Flash formats failed: {fallback_error}")
+                return False
         
         # If we reach here, no model worked
         logger.error("❌ No working Gemini model found!")
