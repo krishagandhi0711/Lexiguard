@@ -63,33 +63,95 @@ app.add_middleware(
 # --- 4. CONFIGURE GOOGLE GEMINI ---
 API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
-    logger.warning("GOOGLE_API_KEY not found in .env. Relying on ADC or Cloud Run credentials.")
+    logger.error("❌ GOOGLE_API_KEY not found in .env file!")
+    logger.error("Please add GOOGLE_API_KEY=your_api_key to your .env file")
+    raise Exception("GOOGLE_API_KEY is required for Gemini API access")
 else:
+    # Configure Gemini with explicit API key to avoid credential conflicts
     genai.configure(api_key=API_KEY)
+    logger.info(f"✅ Gemini API configured with API key: {API_KEY[:8]}...")
 
 safety_settings = {
     "HARM_CATEGORY_HARASSMENT": "block_none",
-    "HARM_CATEGORY_HATE_SPEECH": "block_none",
+    "HARM_CATEGORY_HATE_SPEECH": "block_none", 
     "HARM_CATEGORY_SEXUALLY_EXPLICIT": "block_none",
     "HARM_CATEGORY_DANGEROUS_CONTENT": "block_none",
 }
 
-# Initialize Gemini model - using models from list_models()
-# For v1beta API, must use FULL model name as returned by list_models()
-MODEL_NAME = "models/gemini-2.5-flash"  # Latest Gemini Flash model
+# Initialize Gemini model with proper model discovery
 model = None
+MODEL_NAME = None
 
-try:
-    model = genai.GenerativeModel(MODEL_NAME, safety_settings=safety_settings)
-    logger.info(f"✅ Gemini model initialized successfully with {MODEL_NAME}")
-except Exception as e:
-    logger.error(f"❌ Failed to initialize Gemini model '{MODEL_NAME}': {e}")
-    logger.error("Please check:")
-    logger.error("  1. Your GOOGLE_API_KEY is set correctly in .env")
-    logger.error("  2. The API key has Gemini API access enabled")
-    logger.error("  3. Internet connection is working")
-    model = None
-    MODEL_NAME = None
+def initialize_gemini_model():
+    """Initialize Gemini model with dynamic model discovery"""
+    global model, MODEL_NAME
+    
+    try:
+        # First, list available models to find the correct one
+        logger.info("🔍 Discovering available Gemini models...")
+        available_models = []
+        
+        try:
+            models = genai.list_models()
+            for m in models:
+                if 'generateContent' in m.supported_generation_methods:
+                    available_models.append(m.name)
+                    logger.info(f"   Available: {m.name}")
+        except Exception as list_error:
+            logger.warning(f"Could not list models: {list_error}")
+        
+        # Try different model names in order of preference
+        model_candidates = [
+            "gemini-1.5-flash",        # Most common format
+            "models/gemini-1.5-flash", # Full path format
+            "gemini-1.5-pro",          # Alternative model
+            "models/gemini-1.5-pro",   # Full path alternative
+            "gemini-pro",              # Fallback
+            "models/gemini-pro"        # Full path fallback
+        ]
+        
+        # If we found available models, prefer those
+        if available_models:
+            model_candidates = available_models + model_candidates
+        
+        for candidate in model_candidates:
+            try:
+                logger.info(f"🧪 Trying model: {candidate}")
+                test_model = genai.GenerativeModel(candidate, safety_settings=safety_settings)
+                
+                # Test the model with a simple prompt
+                test_response = test_model.generate_content("Hello! Please respond with 'Working'.")
+                
+                if test_response and test_response.text:
+                    model = test_model
+                    MODEL_NAME = candidate
+                    logger.info(f"✅ Gemini model initialized successfully: {MODEL_NAME}")
+                    logger.info(f"✅ Test response: {test_response.text[:50]}...")
+                    return True
+                    
+            except Exception as test_error:
+                logger.warning(f"❌ Model {candidate} failed: {test_error}")
+                continue
+        
+        # If we reach here, no model worked
+        logger.error("❌ No working Gemini model found!")
+        logger.error("Available models found:", available_models)
+        return False
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize any Gemini model: {e}")
+        return False
+
+# Initialize the model
+success = initialize_gemini_model()
+if not success:
+    logger.error("❌ CRITICAL: Gemini model initialization failed completely")
+    logger.error("Possible solutions:")
+    logger.error("  1. Verify your GOOGLE_API_KEY is correct and has Gemini access")
+    logger.error("  2. Check if you have billing enabled for Gemini API")
+    logger.error("  3. Ensure the API key has the correct scopes")
+    logger.error("  4. Try regenerating your API key in Google Cloud Console")
+    logger.error("  5. Verify Generative AI API is enabled in Google Cloud Console")
 
 # --- 5. CONFIGURE GOOGLE CLOUD DLP ---
 # Initialize DLP client lazily to avoid multiprocessing issues
@@ -1093,177 +1155,221 @@ The LexiGuard Team
 def root():
     return {"message": "LexiGuard API is running successfully 🚀"}
 
-# --- ENHANCED CHAT ENDPOINT WITH ROLE-AWARE FUNCTIONALITY ---
+# --- ROLE-AWARE CHAT ENDPOINT (SIMPLIFIED & SCALABLE) ---
 @app.post("/chat")
 async def chat_with_document(request: ChatRequest):
     """
-    Enhanced chat endpoint supporting role-aware intelligent conversations.
+    Role-Aware Intelligent Chat Agent
+    
+    Implements the exact UX flow specified:
+    1. Role Discovery: "What's your role in this document?"
+    2. Role Confirmation: "I'll answer from the [Role] perspective"
+    3. Role-Aware Responses: All answers tailored to user's role
     
     Features:
-    - Role discovery and persistence
-    - Intent routing (retrieval vs analysis)
+    - Natural role discovery conversation
+    - Role persistence across sessions
     - Persona-based responses
-    - Conversation history support
+    - Scalable state management
     """
     if not model:
-        raise HTTPException(status_code=503, detail="AI model not initialized")
+        raise HTTPException(
+            status_code=503, 
+            detail="AI service is currently unavailable. Please try again later."
+        )
     
-    logger.info(f"Chat request for analysis ID: {request.analysis_id}, Role: {request.user_role}")
+    logger.info(f"💬 Chat request - Analysis: {request.analysis_id}, Role: {request.user_role}")
     
-    # Role discovery and persistence logic
+    # Get current user role (from request or Firestore)
     current_user_role = request.user_role
     
-    # If we have an analysis_id, check for stored role in Firestore
-    if request.analysis_id and firestore_client:
+    # Check Firestore for existing role if analysis_id provided
+    if request.analysis_id and firestore_client and not current_user_role:
         try:
             doc_ref = firestore_client.collection("userAnalyses").document(request.analysis_id)
             doc = doc_ref.get()
             if doc.exists:
                 stored_role = doc.to_dict().get("userRole")
-                if stored_role and not current_user_role:
+                if stored_role:
                     current_user_role = stored_role
-                    logger.info(f"Retrieved stored role: {stored_role}")
+                    logger.info(f"📂 Retrieved stored role: {stored_role}")
         except Exception as e:
-            logger.warning(f"Error accessing Firestore for role: {e}")
+            logger.warning(f"⚠️ Firestore role retrieval failed: {e}")
     
-    # Role discovery prompts
-    INITIAL_ROLE_PROMPT = (
-        "Hello! I'm here to help you understand this document. "
-        "To give you the most relevant and personalized insights, "
-        "could you please tell me **your role** in this document? "
-        "(e.g., Tenant, Landlord, Employee, Employer, Borrower, Lender, Seller, Buyer, Freelancer, Client, Party A, etc.)"
-    )
-    
-    ROLE_ACKNOWLEDGEMENT_PROMPT = (
-        "Understood. I will answer your questions from the perspective of the **{user_role}** in this document. "
-        "Now, what's your first question about this document?"
-    )
-    
-    # Check if we need to discover the user's role
+    # === ROLE DISCOVERY PHASE ===
     if not current_user_role:
-        # Check if user's message might be a role declaration
-        possible_role_input = request.message.strip()
-        role_keywords = ["tenant", "employee", "borrower", "landlord", "employer", "lender", 
-                        "party", "seller", "buyer", "client", "freelancer", "contractor", 
-                        "service provider", "customer", "user", "member"]
+        user_message = request.message.strip().lower()
         
-        is_likely_role_answer = (
-            len(possible_role_input.split()) < 5 and
-            any(kw in possible_role_input.lower() for kw in role_keywords)
+        # Check if user is declaring their role
+        role_keywords = [
+            "tenant", "landlord", "renter", "lessor", "lessee",
+            "employee", "employer", "worker", "boss", "manager",
+            "borrower", "lender", "bank", "creditor", "debtor",
+            "buyer", "seller", "purchaser", "vendor",
+            "client", "customer", "service provider", "contractor",
+            "freelancer", "consultant", "party a", "party b",
+            "plaintiff", "defendant", "licensee", "licensor"
+        ]
+        
+        # Simple role detection: short message with role keywords
+        is_role_declaration = (
+            len(user_message.split()) <= 6 and 
+            any(keyword in user_message for keyword in role_keywords)
         )
         
-        if is_likely_role_answer:
-            # User is declaring their role
-            user_role_declared = possible_role_input
+        if is_role_declaration:
+            # Extract and clean role
+            detected_role = user_message.replace("i'm", "").replace("i am", "").replace("the", "").strip()
+            detected_role = detected_role.title()  # Capitalize properly
             
-            # Save this role to Firestore if analysis_id is provided
+            # Save role to Firestore
             if request.analysis_id and firestore_client:
                 try:
                     doc_ref = firestore_client.collection("userAnalyses").document(request.analysis_id)
-                    doc_ref.update({"userRole": user_role_declared})
-                    logger.info(f"Role '{user_role_declared}' saved for analysis ID {request.analysis_id}")
+                    doc_ref.update({"userRole": detected_role})
+                    logger.info(f"💾 Role '{detected_role}' saved to Firestore")
                 except Exception as e:
-                    logger.warning(f"Failed to save role to Firestore: {e}")
+                    logger.warning(f"⚠️ Failed to save role: {e}")
+            
+            # Role confirmation response
+            confirmation_message = (
+                f"Perfect! I understand you're the **{detected_role}** in this document. "
+                f"I'll provide all my answers from your perspective as the {detected_role}, "
+                f"focusing on your rights, obligations, and interests.\n\n"
+                f"Now, what's your first question about this document?"
+            )
             
             return {
-                "reply": ROLE_ACKNOWLEDGEMENT_PROMPT.format(user_role=user_role_declared),
-                "identified_role": user_role_declared,
-                "needs_role_input": False
+                "reply": confirmation_message,
+                "identified_role": detected_role,
+                "needs_role_input": False,
+                "intent": "role_confirmation"
             }
         else:
-            # Role is unknown, ask for it
+            # Ask for role
+            role_request_message = (
+                "Hello! I'm here to help you understand this document. "
+                "To give you the most relevant and personalized insights, "
+                "**what's your role** in this document?\n\n"
+                "For example:\n"
+                "• Tenant or Landlord (for leases)\n"
+                "• Employee or Employer (for contracts)\n"
+                "• Buyer or Seller (for agreements)\n"
+                "• Borrower or Lender (for loans)\n"
+                "• Client or Service Provider\n"
+                "• Or just tell me like: \"I'm the tenant\" or \"I'm party A\""
+            )
+            
             return {
-                "reply": INITIAL_ROLE_PROMPT,
+                "reply": role_request_message,
                 "identified_role": None,
-                "needs_role_input": True
+                "needs_role_input": True,
+                "intent": "role_discovery"
             }
     
-    # Intent routing using Gemini
-    router_prompt = f"""
-    You are an AI assistant routing user queries about a legal document.
-    The user's role is '{current_user_role}'.
-    Classify the user's question into one of the following categories, responding ONLY with the category name:
-    1. Retrieval: Question asks for a specific fact, definition, or clause from the document.
-    2. Analysis: Question asks for explanation, opinion, implication, risk assessment, or clarification related to the document (from the user's role perspective).
-    3. General: Question is outside the scope of the document (e.g., general knowledge, small talk).
-
-    User Question: "{request.message}"
-    """
-    
-    try:
-        router_response = model.generate_content(router_prompt)
-        intent = router_response.text.strip().lower()
-        logger.info(f"Router classified intent: {intent}")
-    except Exception as e:
-        logger.error(f"Router error: {e}")
-        intent = "general"
-    
-    # Persona-based system prompts
-    SYSTEM_PROMPT_RETRIEVAL = f"""
-    You are a highly accurate, factual assistant providing answers strictly based on the provided document.
-    The user is interacting as the **'{current_user_role}'**. When asked a factual question, extract the exact relevant information from the document.
-    If the information is not explicitly in the document, state clearly that you cannot find it in the provided text.
-    Do NOT offer opinions or external advice.
-    """
-    
-    SYSTEM_PROMPT_ANALYSIS = f"""
-    You are LexiGuard, an expert AI legal co-pilot. Your primary goal is to help the user understand and navigate this legal document.
-    The user identifies as the **'{current_user_role}'**. Always provide insights and explanations *from this perspective*.
-    Explain complex clauses in simple, easy-to-understand language. Identify potential implications and suggest considerations relevant to the user's role.
-    You are supportive and empowering, but always clarify that you are an AI and cannot provide legal advice.
-    """
-    
-    SYSTEM_PROMPT_GENERAL = """
-    You are LexiGuard, a helpful AI assistant. The user has asked a general question that may not be directly related to their document.
-    Provide a helpful response while gently steering the conversation back to document-related topics if appropriate.
-    """
-    
-    # Build conversation context for Gemini
+    # === ROLE-AWARE RESPONSE PHASE ===
+    # Build context for AI
     conversation_context = f"""
-Document Context (PII may be redacted):
-{request.document_text}
+DOCUMENT CONTENT (PII may be redacted for privacy):
+{request.document_text[:3000]}...
 
-User Role: {current_user_role}
+USER ROLE: {current_user_role}
+
+CONVERSATION HISTORY:
 """
     
-    # Add conversation history if provided
+    # Add recent conversation history
     if request.conversation_history:
-        conversation_context += "\n\nPrevious Conversation:\n"
         for msg in request.conversation_history[-4:]:  # Last 4 exchanges
             sender = "User" if msg.get("sender") == "user" else "Assistant"
             conversation_context += f"{sender}: {msg.get('text', '')}\n"
     
-    conversation_context += f"\n\nCurrent User Question: {request.message}"
+    conversation_context += f"\nCURRENT USER QUESTION: {request.message}"
     
-    # Generate response based on intent
-    response_text = "I'm sorry, I'm having trouble processing that right now. Please try again."
+    # Role-specific system prompt
+    system_prompt = f"""
+You are LexiGuard, an expert AI legal co-pilot. Your mission is to help users understand legal documents from their specific perspective.
+
+CRITICAL INSTRUCTIONS:
+- The user is the **{current_user_role}** in this document
+- ALWAYS answer from the {current_user_role}'s perspective
+- Focus on THEIR rights, obligations, risks, and opportunities
+- Explain complex legal terms in simple, everyday language
+- Be supportive and empowering, like a knowledgeable legal advisor
+- When discussing clauses, always explain: "As the {current_user_role}, this means..."
+
+RESPONSE STYLE:
+- Conversational and approachable
+- Confident but humble (you're an AI, not a lawyer)
+- Specific and actionable advice
+- Use examples relevant to the {current_user_role}'s situation
+
+Remember: You're their legal co-pilot, helping them navigate this document successfully.
+"""
     
+    # Generate role-aware response
     try:
-        if "retrieval" in intent:
-            prompt = f"{SYSTEM_PROMPT_RETRIEVAL}\n\n{conversation_context}"
-            response = model.generate_content(prompt)
-            response_text = response.text
-            
-        elif "analysis" in intent:
-            prompt = f"{SYSTEM_PROMPT_ANALYSIS}\n\n{conversation_context}"
-            response = model.generate_content(prompt)
-            response_text = response.text
-            
-        else:  # General or fallback
-            prompt = f"{SYSTEM_PROMPT_GENERAL}\n\n{conversation_context}"
-            response = model.generate_content(prompt)
-            response_text = response.text
-            
+        full_prompt = f"{system_prompt}\n\n{conversation_context}"
+        response = model.generate_content(full_prompt)
+        
+        if not response or not response.text:
+            raise Exception("Empty response from AI model")
+        
+        ai_response = response.text.strip()
+        
+        # Add role context if the response doesn't mention it
+        if current_user_role.lower() not in ai_response.lower():
+            ai_response = f"As the **{current_user_role}**, here's what you need to know:\n\n{ai_response}"
+        
+        return {
+            "reply": ai_response,
+            "identified_role": current_user_role,
+            "needs_role_input": False,
+            "intent": "role_aware_response"
+        }
+        
     except Exception as e:
-        logger.error(f"Error generating response for intent '{intent}': {e}")
-        response_text = "I'm sorry, I'm currently unable to provide that information. Please try again later."
-    
-    return {
-        "reply": response_text,
-        "identified_role": current_user_role,
-        "needs_role_input": False,
-        "intent": intent
-    }
+        error_msg = str(e)
+        logger.error(f"❌ AI response error: {error_msg}")
+        
+        # Enhanced error handling
+        if "403" in error_msg and "ACCESS_TOKEN_SCOPE_INSUFFICIENT" in error_msg:
+            logger.error("❌ Gemini API scope error - API key needs Generative Language API access")
+            fallback_message = (
+                "I'm currently experiencing technical difficulties with the AI service. "
+                "The API authentication needs to be updated. Please contact support."
+            )
+        elif "403" in error_msg:
+            logger.error("❌ Gemini API access denied")
+            fallback_message = (
+                "I'm unable to access the AI service right now. "
+                "This might be a temporary issue. Please try again in a few minutes."
+            )
+        elif "quota" in error_msg.lower() or "limit" in error_msg.lower():
+            logger.error("❌ Gemini API quota/rate limit exceeded")
+            fallback_message = (
+                "I'm currently at capacity due to high usage. "
+                "Please try again in a few minutes."
+            )
+        elif "404" in error_msg:
+            logger.error("❌ Gemini model not found - API version mismatch")
+            fallback_message = (
+                "The AI model is currently unavailable. "
+                "Our technical team has been notified."
+            )
+        else:
+            fallback_message = (
+                "I encountered an unexpected error while processing your question. "
+                "Please try rephrasing your question or try again later."
+            )
+        
+        return {
+            "reply": fallback_message,
+            "identified_role": current_user_role,
+            "needs_role_input": False,
+            "intent": "error_response",
+            "error_type": "ai_service_error"
+        }
 
 @app.post("/analyze-file-async")
 async def analyze_file_async(
@@ -1513,6 +1619,40 @@ async def get_analysis_result(analysis_id: str, user_id: str = Query(...)):
     except Exception as e:
         logger.error(f"❌ Error fetching analysis result: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch analysis: {str(e)}")
+
+
+# --- TEST ENDPOINT FOR GEMINI API ---
+@app.get("/test-gemini")
+async def test_gemini():
+    """Test endpoint to verify Gemini API is working correctly."""
+    if not model:
+        return {
+            "status": "error",
+            "message": "Gemini model not initialized",
+            "api_key_configured": bool(API_KEY),
+            "model_name": MODEL_NAME,
+            "suggestion": "Check server logs for initialization errors"
+        }
+    
+    try:
+        # Simple test prompt
+        test_response = model.generate_content("Hello! Please respond with 'Gemini API is working correctly.'")
+        return {
+            "status": "success",
+            "message": "Gemini API is working correctly",
+            "api_key_configured": True,
+            "model_name": MODEL_NAME,
+            "test_response": test_response.text[:100]
+        }
+    except Exception as e:
+        error_msg = str(e)
+        return {
+            "status": "error",
+            "message": f"Gemini API test failed: {error_msg}",
+            "api_key_configured": bool(API_KEY),
+            "model_name": MODEL_NAME,
+            "error_type": "authentication" if "403" in error_msg else "model_access" if "404" in error_msg else "unknown"
+        }
 
 
 # --- RUN SERVER ---

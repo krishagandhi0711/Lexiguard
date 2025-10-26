@@ -12,6 +12,7 @@ import FAQ from "./pages/FAQ";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Login from "./pages/Login";
+import ChatWithDocument from "./pages/ChatWithDocument"; // ✅ ADD CHAT IMPORT
 
 function App() {
   return (
@@ -60,6 +61,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Results />
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* ✅ ADD CHAT ROUTE - Chat with Document */}
+            <Route
+              path="/chat/:analysisId"
+              element={
+                <ProtectedRoute>
+                  <ChatWithDocument />
                 </ProtectedRoute>
               }
             />

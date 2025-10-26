@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:8000';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
 /**
  * Role-Aware Intelligent Chat Agent Component
@@ -34,9 +34,19 @@ export default function RoleAwareChatAgent({
   redactedDocumentText, 
   className = "",
   showTitle = true,
-  height = "500px"
+  height = "600px"  // ✅ Increased from 500px to 600px for better readability
 }) {
   const { currentUser } = useAuth();
+  
+  // Debug logging
+  console.log('🚀 RoleAwareChatAgent rendered with props:', {
+    analysisId,
+    hasRedactedText: !!redactedDocumentText,
+    redactedTextLength: redactedDocumentText?.length || 0,
+    currentUserExists: !!currentUser,
+    currentUserUid: currentUser?.uid,
+    height
+  });
   
   // Chat state
   const [messages, setMessages] = useState([]);
@@ -52,23 +62,51 @@ export default function RoleAwareChatAgent({
   // Error and connection state
   const [connectionError, setConnectionError] = useState(null);
   
+  // Document text with fallback
+  const documentText = redactedDocumentText || 'No document text available';
+  
   // Refs
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   
   // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'end'
+    });
   };
   
   useEffect(() => {
-    scrollToBottom();
+    // Add a small delay to ensure DOM is updated
+    const timeoutId = setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, [messages]);
   
   // Initialize chat and load previous conversation
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!chatInitialized && analysisId && currentUser && redactedDocumentText) {
+    console.log('🔄 useEffect triggered:', {
+      chatInitialized,
+      analysisId: !!analysisId,
+      currentUser: !!currentUser,
+      redactedDocumentText: !!redactedDocumentText,
+      redactedTextLength: redactedDocumentText?.length || 0,
+      documentText: documentText?.substring(0, 50) + '...'
+    });
+    
+    if (!chatInitialized && analysisId && currentUser) {
+      console.log('✅ Starting chat initialization...');
       initializeChat();
+    } else {
+      console.log('❌ Chat initialization skipped:', {
+        chatInitialized,
+        hasAnalysisId: !!analysisId,
+        hasCurrentUser: !!currentUser
+      });
     }
   }, [chatInitialized, analysisId, currentUser, redactedDocumentText]);
   
@@ -116,11 +154,11 @@ export default function RoleAwareChatAgent({
     try {
       const response = await fetchChatResponse('', false); // Empty message to trigger role discovery
       
-      if (response.needs_role_input) {
-        addMessage('ai', response.reply);
-      } else if (response.identified_role) {
+      if (response && response.needs_role_input) {
+        addMessage('ai', response.reply || 'Hello! What\'s your role in this document?');
+      } else if (response && response.identified_role) {
         await handleRoleIdentification(response.identified_role);
-        addMessage('ai', response.reply);
+        addMessage('ai', response.reply || 'Role identified successfully.');
       }
     } catch (error) {
       console.error('❌ Role discovery error:', error);
@@ -146,7 +184,7 @@ export default function RoleAwareChatAgent({
     const message = {
       id: Date.now() + Math.random(),
       sender,
-      content,
+      content: content || '', // Ensure content is never undefined/null
       timestamp: new Date(),
       ...metadata
     };
@@ -172,8 +210,9 @@ export default function RoleAwareChatAgent({
         await handleRoleIdentification(response.identified_role);
       }
       
-      // Add AI response
-      addMessage('ai', response.reply, {
+      // Add AI response - ensure reply exists
+      const aiReply = response.reply || 'I encountered an issue processing your request.';
+      addMessage('ai', aiReply, {
         intent: response.intent,
         role: response.identified_role
       });
@@ -289,25 +328,36 @@ export default function RoleAwareChatAgent({
     }
   };
   
-  if (!analysisId || !redactedDocumentText) {
+  if (!analysisId) {
+    console.log('❌ RoleAwareChatAgent: No analysisId provided');
     return (
       <Card className={`border-none bg-[#064E3B]/90 backdrop-blur-md shadow-2xl ${className}`}>
         <CardContent className="p-6 text-center">
           <AlertCircle className="w-12 h-12 text-amber-400 mx-auto mb-4" />
-          <p className="text-gray-300">Chat is not available for this analysis.</p>
+          <p className="text-gray-300">Chat is not available - Missing analysis ID.</p>
         </CardContent>
       </Card>
     );
   }
   
   return (
-    <Card className={`border-none bg-[#064E3B]/90 backdrop-blur-md shadow-2xl flex flex-col ${className}`} style={{ height }}>
+    <Card 
+      className={`border-none bg-[#064E3B]/90 backdrop-blur-md shadow-2xl flex flex-col ${className}`} 
+      style={{ 
+        height: height, 
+        maxHeight: height, 
+        minHeight: '500px', // ✅ Increased minimum height for better UX
+        overflow: 'hidden' // Prevent any content from expanding beyond container
+      }}
+    >
       {showTitle && (
         <CardHeader className="border-b border-gray-700/50 flex-shrink-0">
           <CardTitle className="flex items-center justify-between text-white text-lg">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-cyan-400" />
               Chat with Document
+              {/* Debug indicator */}
+              <span className="text-xs text-green-400">●</span>
             </div>
             <div className="flex items-center gap-2">
               {showRoleBadge && userRole && (
@@ -339,7 +389,7 @@ export default function RoleAwareChatAgent({
         </CardHeader>
       )}
       
-      <CardContent className="flex flex-col flex-1 overflow-hidden p-4">
+      <CardContent className="flex flex-col flex-1 overflow-hidden p-4 min-h-0">
         {/* Connection Error Banner */}
         {connectionError && (
           <motion.div
@@ -352,12 +402,17 @@ export default function RoleAwareChatAgent({
           </motion.div>
         )}
         
-        {/* Messages Container */}
+        {/* Messages Container - Fixed height with scrolling */}
         <div
-          className="flex-1 flex flex-col gap-3 overflow-y-auto px-2 py-2 scroll-smooth"
+          className="flex-1 flex flex-col gap-3 overflow-y-auto overflow-x-hidden px-4 py-6 scroll-smooth"
           style={{
             scrollbarWidth: "thin",
             scrollbarColor: "#0FC6B2 #0F2A40",
+            maxHeight: "100%",
+            flex: "1 1 0", // Ensure proper flex behavior
+            minHeight: "350px", // ✅ Set minimum height for the messages container
+            backgroundColor: "rgba(255, 255, 255, 0.05)", // ✅ Subtle background to make container more visible
+            borderRadius: "12px", // ✅ Rounded corners for better appearance
           }}
         >
           <AnimatePresence initial={false}>
@@ -368,7 +423,7 @@ export default function RoleAwareChatAgent({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} flex-shrink-0`}
               >
                 <div
                   className={`max-w-[85%] p-4 rounded-2xl shadow-lg transition-all duration-200 ${
@@ -387,7 +442,7 @@ export default function RoleAwareChatAgent({
                       <div 
                         className="text-sm leading-relaxed"
                         dangerouslySetInnerHTML={{
-                          __html: message.content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                          __html: (message.content || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                         }}
                       />
                       {message.intent && (

@@ -9,14 +9,11 @@ import RoleAwareChatAgent from "../components/RoleAwareChatAgent";
 import { getAnalysisById } from "../services/firestoreService";
 import LanguageSelector from "../components/LanguageSelector";
 import { getTranslation, requestTranslation } from "../services/firestoreService";
-// REMOVE THIS LINE: import MarkdownRenderer from "../components/MarkdownRenderer";
 import {
   AlertTriangle,
   CheckCircle,
   FileText,
-  MessageSquare,
   ArrowLeft,
-  Send,
   Mail,
   Scale,
   TrendingUp,
@@ -1028,8 +1025,11 @@ const handleLanguageChange = async (languageCode) => {
                 transition={{ delay: 0.6 }}
               >
                 <RoleAwareChatAgent 
-                  documentContext={documentAnalysis?.summary || 'Document analysis results'} 
+                  redactedDocumentText={analysis?.redacted_text || analysis?.redacted_document_text || analysis?.summary || 'Document analysis results'} 
                   analysisId={analysisId}
+                  height="500px"
+                  showTitle={true}
+                  className=""
                 />
               </motion.div>
 
