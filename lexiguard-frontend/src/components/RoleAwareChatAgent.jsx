@@ -53,6 +53,7 @@ export default function RoleAwareChatAgent({
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [chatInitialized, setChatInitialized] = useState(false);
+  const [initializationInProgress, setInitializationInProgress] = useState(false); // ✅ Prevent double initialization
   
   // Role state
   const [userRole, setUserRole] = useState(null);
@@ -68,6 +69,8 @@ export default function RoleAwareChatAgent({
   // Refs
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const typewriterIntervals = useRef(new Set()); // ✅ Track intervals for cleanup
+  const hasInitialized = useRef(false); // ✅ Prevent React StrictMode double initialization
   
   // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
@@ -85,30 +88,48 @@ export default function RoleAwareChatAgent({
     
     return () => clearTimeout(timeoutId);
   }, [messages]);
+
+  // ✅ Cleanup typewriter intervals on unmount
+  useEffect(() => {
+    return () => {
+      typewriterIntervals.current.forEach(interval => clearInterval(interval));
+      typewriterIntervals.current.clear();
+    };
+  }, []);
   
   // Initialize chat and load previous conversation
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     console.log('🔄 useEffect triggered:', {
       chatInitialized,
+      initializationInProgress,
+      hasInitializedRef: hasInitialized.current,
       analysisId: !!analysisId,
       currentUser: !!currentUser,
-      redactedDocumentText: !!redactedDocumentText,
-      redactedTextLength: redactedDocumentText?.length || 0,
-      documentText: documentText?.substring(0, 50) + '...'
+      messagesLength: messages.length
     });
     
-    if (!chatInitialized && analysisId && currentUser) {
+    // ✅ Triple protection against double initialization
+    if (!chatInitialized && 
+        !initializationInProgress && 
+        !hasInitialized.current && 
+        analysisId && 
+        currentUser) {
       console.log('✅ Starting chat initialization...');
+      hasInitialized.current = true; // ✅ Prevent React StrictMode double calls
+      setInitializationInProgress(true);
       initializeChat();
     } else {
       console.log('❌ Chat initialization skipped:', {
         chatInitialized,
+        initializationInProgress,
+        hasInitializedRef: hasInitialized.current,
         hasAnalysisId: !!analysisId,
-        hasCurrentUser: !!currentUser
+        hasCurrentUser: !!currentUser,
+        messagesLength: messages.length
       });
     }
-  }, [chatInitialized, analysisId, currentUser, redactedDocumentText]);
+  }, [chatInitialized, analysisId, currentUser]);
   
   const initializeChat = async () => {
     try {
@@ -130,14 +151,30 @@ export default function RoleAwareChatAgent({
       if (existingHistory && existingHistory.length > 0) {
         setMessages(existingHistory);
         console.log(`✅ Loaded ${existingHistory.length} previous messages`);
-      } else {
+      } else if (messages.length === 0) { // ✅ Only add initial message if no messages exist
         // Start with initial role discovery if no role exists
         if (!existingRole) {
-          await initiateRoleDiscovery();
+          console.log('🎯 Adding role discovery message (no existing role, no existing history)');
+          // ✅ Use typewriter effect for role discovery message
+          addMessageWithTypewriter('ai', 
+            "Hello! I'm here to help you understand this document. " +
+            "To give you the most relevant and personalized insights, " +
+            "**what's your role** in this document?\n\n" +
+            "For example:\n" +
+            "• Tenant or Landlord (for leases)\n" +
+            "• Employee or Employer (for contracts)\n" +
+            "• Buyer or Seller (for agreements)\n" +
+            "• Borrower or Lender (for loans)\n" +
+            "• Client or Service Provider\n" +
+            "• Or just tell me like: \"I'm the tenant\" or \"I'm party A\""
+          );
         } else {
+          console.log('🎯 Adding welcome message (existing role, no existing history)');
           // If role exists but no history, show a welcome message
-          addMessage('ai', `Hello! I'm ready to help you understand this document from your perspective as the **${existingRole}**. What questions do you have?`);
+          addMessageWithTypewriter('ai', `Hello! I'm ready to help you understand this document from your perspective as the **${existingRole}**. What questions do you have?`);
         }
+      } else {
+        console.log('🔄 Skipping initial message - messages already exist:', messages.length);
       }
       
       setChatInitialized(true);
@@ -147,22 +184,7 @@ export default function RoleAwareChatAgent({
       addMessage('ai', 'Sorry, I encountered an error during initialization. Please refresh the page and try again.');
     } finally {
       setIsLoading(false);
-    }
-  };
-  
-  const initiateRoleDiscovery = async () => {
-    try {
-      const response = await fetchChatResponse('', false); // Empty message to trigger role discovery
-      
-      if (response && response.needs_role_input) {
-        addMessage('ai', response.reply || 'Hello! What\'s your role in this document?');
-      } else if (response && response.identified_role) {
-        await handleRoleIdentification(response.identified_role);
-        addMessage('ai', response.reply || 'Role identified successfully.');
-      }
-    } catch (error) {
-      console.error('❌ Role discovery error:', error);
-      addMessage('ai', 'Hello! I\'m here to help you understand this document. Could you please tell me your role in this document (e.g., Tenant, Employee, Buyer, etc.)?');
+      setInitializationInProgress(false); // ✅ Reset initialization flag
     }
   };
   
@@ -186,10 +208,62 @@ export default function RoleAwareChatAgent({
       sender,
       content: content || '', // Ensure content is never undefined/null
       timestamp: new Date(),
+      isTyping: sender === 'ai', // ✅ Flag for typewriter effect
       ...metadata
     };
     
     setMessages(prev => [...prev, message]);
+    return message;
+  };
+
+  // ✅ Add typewriter effect for AI messages
+  const addMessageWithTypewriter = (sender, content, metadata = {}) => {
+    if (sender !== 'ai' || !content) {
+      return addMessage(sender, content, metadata);
+    }
+
+    // Add message with empty content first
+    const message = {
+      id: Date.now() + Math.random(),
+      sender,
+      content: '',
+      timestamp: new Date(),
+      isTyping: true,
+      fullContent: content, // Store full content for typewriter effect
+      ...metadata
+    };
+    
+    setMessages(prev => [...prev, message]);
+
+    // Start typewriter effect
+    let currentText = '';
+    let currentIndex = 0;
+    const words = content.split(' ');
+    
+    const typeInterval = setInterval(() => {
+      if (currentIndex < words.length) {
+        currentText += (currentIndex > 0 ? ' ' : '') + words[currentIndex];
+        currentIndex++;
+        
+        // Update the message content
+        setMessages(prev => prev.map(msg => 
+          msg.id === message.id 
+            ? { ...msg, content: currentText }
+            : msg
+        ));
+      } else {
+        // Finished typing
+        clearInterval(typeInterval);
+        typewriterIntervals.current.delete(typeInterval); // ✅ Remove from tracking
+        setMessages(prev => prev.map(msg => 
+          msg.id === message.id 
+            ? { ...msg, isTyping: false }
+            : msg
+        ));
+      }
+    }, 50); // Adjust speed: 50ms per word (fast but readable)
+
+    typewriterIntervals.current.add(typeInterval); // ✅ Track interval for cleanup
     return message;
   };
   
@@ -210,9 +284,9 @@ export default function RoleAwareChatAgent({
         await handleRoleIdentification(response.identified_role);
       }
       
-      // Add AI response - ensure reply exists
+      // Add AI response - ensure reply exists and use typewriter effect
       const aiReply = response.reply || 'I encountered an issue processing your request.';
-      addMessage('ai', aiReply, {
+      addMessageWithTypewriter('ai', aiReply, {
         intent: response.intent,
         role: response.identified_role
       });
@@ -313,6 +387,8 @@ export default function RoleAwareChatAgent({
       setRoleDiscoveryComplete(false);
       setShowRoleBadge(false);
       setChatInitialized(false);
+      setInitializationInProgress(false); // ✅ Reset initialization flag
+      hasInitialized.current = false; // ✅ Reset ref for fresh initialization
       setConnectionError(null);
       
       // Clear role from Firestore
@@ -445,6 +521,16 @@ export default function RoleAwareChatAgent({
                           __html: (message.content || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                         }}
                       />
+                      {/* ✅ Typing indicator */}
+                      {message.isTyping && (
+                        <div className="inline-flex items-center ml-2">
+                          <div className="flex space-x-1">
+                            <div className="w-1 h-1 bg-cyan-400 rounded-full animate-pulse"></div>
+                            <div className="w-1 h-1 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                            <div className="w-1 h-1 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                          </div>
+                        </div>
+                      )}
                       {message.intent && (
                         <div className="mt-2 text-xs opacity-75">
                           Intent: {message.intent}
