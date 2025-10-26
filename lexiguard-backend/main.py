@@ -13,6 +13,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
+from typing import Optional, List, Dict
 from dotenv import load_dotenv
 import google.generativeai as genai
 from google.cloud import dlp_v2
@@ -422,6 +423,9 @@ class DocumentRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     document_text: str
+    analysis_id: Optional[str] = None
+    user_role: Optional[str] = None
+    conversation_history: Optional[List[Dict[str, str]]] = None
     analysis_id: Optional[str] = None
     user_role: Optional[str] = None
     conversation_history: Optional[List[Dict[str, str]]] = None
@@ -1155,221 +1159,177 @@ The LexiGuard Team
 def root():
     return {"message": "LexiGuard API is running successfully 🚀"}
 
-# --- ROLE-AWARE CHAT ENDPOINT (SIMPLIFIED & SCALABLE) ---
+# --- ENHANCED CHAT ENDPOINT WITH ROLE-AWARE FUNCTIONALITY ---
 @app.post("/chat")
 async def chat_with_document(request: ChatRequest):
     """
-    Role-Aware Intelligent Chat Agent
-    
-    Implements the exact UX flow specified:
-    1. Role Discovery: "What's your role in this document?"
-    2. Role Confirmation: "I'll answer from the [Role] perspective"
-    3. Role-Aware Responses: All answers tailored to user's role
+    Enhanced chat endpoint supporting role-aware intelligent conversations.
     
     Features:
-    - Natural role discovery conversation
-    - Role persistence across sessions
+    - Role discovery and persistence
+    - Intent routing (retrieval vs analysis)
     - Persona-based responses
-    - Scalable state management
+    - Conversation history support
     """
     if not model:
-        raise HTTPException(
-            status_code=503, 
-            detail="AI service is currently unavailable. Please try again later."
-        )
+        raise HTTPException(status_code=503, detail="AI model not initialized")
     
-    logger.info(f"💬 Chat request - Analysis: {request.analysis_id}, Role: {request.user_role}")
+    logger.info(f"Chat request for analysis ID: {request.analysis_id}, Role: {request.user_role}")
     
-    # Get current user role (from request or Firestore)
+    # Role discovery and persistence logic
     current_user_role = request.user_role
     
-    # Check Firestore for existing role if analysis_id provided
-    if request.analysis_id and firestore_client and not current_user_role:
+    # If we have an analysis_id, check for stored role in Firestore
+    if request.analysis_id and firestore_client:
         try:
             doc_ref = firestore_client.collection("userAnalyses").document(request.analysis_id)
             doc = doc_ref.get()
             if doc.exists:
                 stored_role = doc.to_dict().get("userRole")
-                if stored_role:
+                if stored_role and not current_user_role:
                     current_user_role = stored_role
-                    logger.info(f"📂 Retrieved stored role: {stored_role}")
+                    logger.info(f"Retrieved stored role: {stored_role}")
         except Exception as e:
-            logger.warning(f"⚠️ Firestore role retrieval failed: {e}")
+            logger.warning(f"Error accessing Firestore for role: {e}")
     
-    # === ROLE DISCOVERY PHASE ===
+    # Role discovery prompts
+    INITIAL_ROLE_PROMPT = (
+        "Hello! I'm here to help you understand this document. "
+        "To give you the most relevant and personalized insights, "
+        "could you please tell me **your role** in this document? "
+        "(e.g., Tenant, Landlord, Employee, Employer, Borrower, Lender, Seller, Buyer, Freelancer, Client, Party A, etc.)"
+    )
+    
+    ROLE_ACKNOWLEDGEMENT_PROMPT = (
+        "Understood. I will answer your questions from the perspective of the **{user_role}** in this document. "
+        "Now, what's your first question about this document?"
+    )
+    
+    # Check if we need to discover the user's role
     if not current_user_role:
-        user_message = request.message.strip().lower()
+        # Check if user's message might be a role declaration
+        possible_role_input = request.message.strip()
+        role_keywords = ["tenant", "employee", "borrower", "landlord", "employer", "lender", 
+                        "party", "seller", "buyer", "client", "freelancer", "contractor", 
+                        "service provider", "customer", "user", "member"]
         
-        # Check if user is declaring their role
-        role_keywords = [
-            "tenant", "landlord", "renter", "lessor", "lessee",
-            "employee", "employer", "worker", "boss", "manager",
-            "borrower", "lender", "bank", "creditor", "debtor",
-            "buyer", "seller", "purchaser", "vendor",
-            "client", "customer", "service provider", "contractor",
-            "freelancer", "consultant", "party a", "party b",
-            "plaintiff", "defendant", "licensee", "licensor"
-        ]
-        
-        # Simple role detection: short message with role keywords
-        is_role_declaration = (
-            len(user_message.split()) <= 6 and 
-            any(keyword in user_message for keyword in role_keywords)
+        is_likely_role_answer = (
+            len(possible_role_input.split()) < 5 and
+            any(kw in possible_role_input.lower() for kw in role_keywords)
         )
         
-        if is_role_declaration:
-            # Extract and clean role
-            detected_role = user_message.replace("i'm", "").replace("i am", "").replace("the", "").strip()
-            detected_role = detected_role.title()  # Capitalize properly
+        if is_likely_role_answer:
+            # User is declaring their role
+            user_role_declared = possible_role_input
             
-            # Save role to Firestore
+            # Save this role to Firestore if analysis_id is provided
             if request.analysis_id and firestore_client:
                 try:
                     doc_ref = firestore_client.collection("userAnalyses").document(request.analysis_id)
-                    doc_ref.update({"userRole": detected_role})
-                    logger.info(f"💾 Role '{detected_role}' saved to Firestore")
+                    doc_ref.update({"userRole": user_role_declared})
+                    logger.info(f"Role '{user_role_declared}' saved for analysis ID {request.analysis_id}")
                 except Exception as e:
-                    logger.warning(f"⚠️ Failed to save role: {e}")
-            
-            # Role confirmation response
-            confirmation_message = (
-                f"Perfect! I understand you're the **{detected_role}** in this document. "
-                f"I'll provide all my answers from your perspective as the {detected_role}, "
-                f"focusing on your rights, obligations, and interests.\n\n"
-                f"Now, what's your first question about this document?"
-            )
+                    logger.warning(f"Failed to save role to Firestore: {e}")
             
             return {
-                "reply": confirmation_message,
-                "identified_role": detected_role,
-                "needs_role_input": False,
-                "intent": "role_confirmation"
+                "reply": ROLE_ACKNOWLEDGEMENT_PROMPT.format(user_role=user_role_declared),
+                "identified_role": user_role_declared,
+                "needs_role_input": False
             }
         else:
-            # Ask for role
-            role_request_message = (
-                "Hello! I'm here to help you understand this document. "
-                "To give you the most relevant and personalized insights, "
-                "**what's your role** in this document?\n\n"
-                "For example:\n"
-                "• Tenant or Landlord (for leases)\n"
-                "• Employee or Employer (for contracts)\n"
-                "• Buyer or Seller (for agreements)\n"
-                "• Borrower or Lender (for loans)\n"
-                "• Client or Service Provider\n"
-                "• Or just tell me like: \"I'm the tenant\" or \"I'm party A\""
-            )
-            
+            # Role is unknown, ask for it
             return {
-                "reply": role_request_message,
+                "reply": INITIAL_ROLE_PROMPT,
                 "identified_role": None,
-                "needs_role_input": True,
-                "intent": "role_discovery"
+                "needs_role_input": True
             }
     
-    # === ROLE-AWARE RESPONSE PHASE ===
-    # Build context for AI
+    # Intent routing using Gemini
+    router_prompt = f"""
+    You are an AI assistant routing user queries about a legal document.
+    The user's role is '{current_user_role}'.
+    Classify the user's question into one of the following categories, responding ONLY with the category name:
+    1. Retrieval: Question asks for a specific fact, definition, or clause from the document.
+    2. Analysis: Question asks for explanation, opinion, implication, risk assessment, or clarification related to the document (from the user's role perspective).
+    3. General: Question is outside the scope of the document (e.g., general knowledge, small talk).
+
+    User Question: "{request.message}"
+    """
+    
+    try:
+        router_response = model.generate_content(router_prompt)
+        intent = router_response.text.strip().lower()
+        logger.info(f"Router classified intent: {intent}")
+    except Exception as e:
+        logger.error(f"Router error: {e}")
+        intent = "general"
+    
+    # Persona-based system prompts
+    SYSTEM_PROMPT_RETRIEVAL = f"""
+    You are a highly accurate, factual assistant providing answers strictly based on the provided document.
+    The user is interacting as the **'{current_user_role}'**. When asked a factual question, extract the exact relevant information from the document.
+    If the information is not explicitly in the document, state clearly that you cannot find it in the provided text.
+    Do NOT offer opinions or external advice.
+    """
+    
+    SYSTEM_PROMPT_ANALYSIS = f"""
+    You are LexiGuard, an expert AI legal co-pilot. Your primary goal is to help the user understand and navigate this legal document.
+    The user identifies as the **'{current_user_role}'**. Always provide insights and explanations *from this perspective*.
+    Explain complex clauses in simple, easy-to-understand language. Identify potential implications and suggest considerations relevant to the user's role.
+    You are supportive and empowering, but always clarify that you are an AI and cannot provide legal advice.
+    """
+    
+    SYSTEM_PROMPT_GENERAL = """
+    You are LexiGuard, a helpful AI assistant. The user has asked a general question that may not be directly related to their document.
+    Provide a helpful response while gently steering the conversation back to document-related topics if appropriate.
+    """
+    
+    # Build conversation context for Gemini
     conversation_context = f"""
-DOCUMENT CONTENT (PII may be redacted for privacy):
-{request.document_text[:3000]}...
+Document Context (PII may be redacted):
+{request.document_text}
 
-USER ROLE: {current_user_role}
-
-CONVERSATION HISTORY:
+User Role: {current_user_role}
 """
     
-    # Add recent conversation history
+    # Add conversation history if provided
     if request.conversation_history:
+        conversation_context += "\n\nPrevious Conversation:\n"
         for msg in request.conversation_history[-4:]:  # Last 4 exchanges
             sender = "User" if msg.get("sender") == "user" else "Assistant"
             conversation_context += f"{sender}: {msg.get('text', '')}\n"
     
-    conversation_context += f"\nCURRENT USER QUESTION: {request.message}"
+    conversation_context += f"\n\nCurrent User Question: {request.message}"
     
-    # Role-specific system prompt
-    system_prompt = f"""
-You are LexiGuard, an expert AI legal co-pilot. Your mission is to help users understand legal documents from their specific perspective.
-
-CRITICAL INSTRUCTIONS:
-- The user is the **{current_user_role}** in this document
-- ALWAYS answer from the {current_user_role}'s perspective
-- Focus on THEIR rights, obligations, risks, and opportunities
-- Explain complex legal terms in simple, everyday language
-- Be supportive and empowering, like a knowledgeable legal advisor
-- When discussing clauses, always explain: "As the {current_user_role}, this means..."
-
-RESPONSE STYLE:
-- Conversational and approachable
-- Confident but humble (you're an AI, not a lawyer)
-- Specific and actionable advice
-- Use examples relevant to the {current_user_role}'s situation
-
-Remember: You're their legal co-pilot, helping them navigate this document successfully.
-"""
+    # Generate response based on intent
+    response_text = "I'm sorry, I'm having trouble processing that right now. Please try again."
     
-    # Generate role-aware response
     try:
-        full_prompt = f"{system_prompt}\n\n{conversation_context}"
-        response = model.generate_content(full_prompt)
-        
-        if not response or not response.text:
-            raise Exception("Empty response from AI model")
-        
-        ai_response = response.text.strip()
-        
-        # Add role context if the response doesn't mention it
-        if current_user_role.lower() not in ai_response.lower():
-            ai_response = f"As the **{current_user_role}**, here's what you need to know:\n\n{ai_response}"
-        
-        return {
-            "reply": ai_response,
-            "identified_role": current_user_role,
-            "needs_role_input": False,
-            "intent": "role_aware_response"
-        }
-        
+        if "retrieval" in intent:
+            prompt = f"{SYSTEM_PROMPT_RETRIEVAL}\n\n{conversation_context}"
+            response = model.generate_content(prompt)
+            response_text = response.text
+            
+        elif "analysis" in intent:
+            prompt = f"{SYSTEM_PROMPT_ANALYSIS}\n\n{conversation_context}"
+            response = model.generate_content(prompt)
+            response_text = response.text
+            
+        else:  # General or fallback
+            prompt = f"{SYSTEM_PROMPT_GENERAL}\n\n{conversation_context}"
+            response = model.generate_content(prompt)
+            response_text = response.text
+            
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"❌ AI response error: {error_msg}")
-        
-        # Enhanced error handling
-        if "403" in error_msg and "ACCESS_TOKEN_SCOPE_INSUFFICIENT" in error_msg:
-            logger.error("❌ Gemini API scope error - API key needs Generative Language API access")
-            fallback_message = (
-                "I'm currently experiencing technical difficulties with the AI service. "
-                "The API authentication needs to be updated. Please contact support."
-            )
-        elif "403" in error_msg:
-            logger.error("❌ Gemini API access denied")
-            fallback_message = (
-                "I'm unable to access the AI service right now. "
-                "This might be a temporary issue. Please try again in a few minutes."
-            )
-        elif "quota" in error_msg.lower() or "limit" in error_msg.lower():
-            logger.error("❌ Gemini API quota/rate limit exceeded")
-            fallback_message = (
-                "I'm currently at capacity due to high usage. "
-                "Please try again in a few minutes."
-            )
-        elif "404" in error_msg:
-            logger.error("❌ Gemini model not found - API version mismatch")
-            fallback_message = (
-                "The AI model is currently unavailable. "
-                "Our technical team has been notified."
-            )
-        else:
-            fallback_message = (
-                "I encountered an unexpected error while processing your question. "
-                "Please try rephrasing your question or try again later."
-            )
-        
-        return {
-            "reply": fallback_message,
-            "identified_role": current_user_role,
-            "needs_role_input": False,
-            "intent": "error_response",
-            "error_type": "ai_service_error"
-        }
+        logger.error(f"Error generating response for intent '{intent}': {e}")
+        response_text = "I'm sorry, I'm currently unable to provide that information. Please try again later."
+    
+    return {
+        "reply": response_text,
+        "identified_role": current_user_role,
+        "needs_role_input": False,
+        "intent": intent
+    }
 
 @app.post("/analyze-file-async")
 async def analyze_file_async(

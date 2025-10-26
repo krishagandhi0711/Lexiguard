@@ -1057,13 +1057,58 @@ const handleLanguageChange = async (languageCode) => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.6 }}
               >
-                <RoleAwareChatAgent 
-                  analysisId={analysisId}
-                  redactedDocumentText={analysis?.redacted_text || analysis?.redacted_document_text || ''}
-                  height="500px"
-                  showTitle={true}
-                  className=""
-                />
+                <Card className="border-none bg-[#064E3B]/90 backdrop-blur-md shadow-2xl flex flex-col h-[500px]">
+                  <CardHeader className="border-b border-gray-700/50">
+                    <CardTitle className="flex items-center gap-2 text-white text-lg">
+                      <MessageSquare className="w-5 h-5 text-cyan-400" />
+                      Chat with Document
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col flex-1 overflow-hidden p-4">
+                    <div
+                      id="chat-container"
+                      className="flex-1 flex flex-col gap-2 overflow-y-auto px-2 py-2"
+                      style={{
+                        scrollbarWidth: "thin",
+                        scrollbarColor: "#0FC6B2 #0F2A40",
+                      }}
+                    >
+                      {chatHistory.map((msg, idx) => (
+                        <div
+                          key={idx}
+                          className={`inline-block max-w-[70%] p-3 rounded-2xl break-words shadow-md transition-shadow duration-200 ${
+                            msg.role === "user"
+                              ? "bg-gradient-to-r from-cyan-600 to-cyan-500 text-white self-end mr-0"
+                              : "bg-gray-800 text-gray-100 self-start ml-0"
+                          }`}
+                        >
+                          {msg.content}
+                        </div>
+                      ))}
+                      {chatLoading && (
+                        <p className="text-gray-300 italic text-sm self-start">AI is typing...</p>
+                      )}
+                    </div>
+
+                    <div className="mt-2 flex space-x-2">
+                      <input
+                        type="text"
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                        placeholder="Type your message..."
+                        className="flex-1 p-3 rounded-2xl bg-[#064E3B]/80 text-white border border-gray-600 focus:outline-none placeholder-gray-400"
+                      />
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={chatLoading || !chatMessage.trim()}
+                        className="bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl px-6"
+                      >
+                        Send
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </motion.div>
               <Button
                 onClick={() => navigate("/upload")}
