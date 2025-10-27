@@ -1,23 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
-import BackToTop from "../components/BackToTop";
-import RoleAwareChatAgent from "../components/RoleAwareChatAgent";
-import { getAnalysisById } from "../services/firestoreService";
-import LanguageSelector from "../components/LanguageSelector";
-import { getTranslation, requestTranslation } from "../services/firestoreService";
-
-// Use environment variable for API base URL (secure for production)
-const BASE_URL = process.env.REACT_APP_BACKEND_URL;
-
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
   CheckCircle,
   FileText,
-  MessageSquare,
   ArrowLeft,
   Mail,
   Scale,
@@ -31,7 +18,17 @@ import {
   Loader2,
   Globe,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "../contexts/AuthContext";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import BackToTop from "../components/BackToTop";
+import RoleAwareChatAgent from "../components/RoleAwareChatAgent";
+import LanguageSelector from "../components/LanguageSelector";
+import { getAnalysisById, getTranslation, requestTranslation } from "../services/firestoreService";
+
+// Use environment variable for API base URL (secure for production)
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
 const KEYWORDS_REGEX = /\b(agreement|contract|clause|liability|termination|penalty|indemnity|renewal)\b/gi;
 const ACTIONABLE_REGEX = /\b(\d+\s*(days?|weeks?|months?|years?)|due by|deadline|penalty|fine|termination|payment of \$?\d+|effective date|must|shall|obligated|required)\b/gi;
