@@ -69,6 +69,14 @@ if (isProduction && isVercel) {
   console.log('   1. Go to Firebase Console → Authentication → Settings → Authorized domains');
   console.log(`   2. Add: ${window.location.hostname}`);
   console.log('   3. Also add: *.vercel.app for wildcard support');
+  console.log(`   4. Current domain: ${window.location.hostname}`);
+  
+  // Check if current domain is the known production domain
+  if (window.location.hostname === 'lexiguard-one.vercel.app') {
+    console.log('✅ Detected known production domain: lexiguard-one.vercel.app');
+  } else {
+    console.log('⚠️ Unknown domain detected - make sure to add it to Firebase Console');
+  }
 }
 
 export default app;

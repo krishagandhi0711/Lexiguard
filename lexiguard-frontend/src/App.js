@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ProductionDebug from "./components/ProductionDebug"; // Temporary debug component
 import Home from "./pages/Home";
 import Upload from "./pages/Upload";
 import Results from "./pages/Results";
@@ -14,10 +15,13 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Login from "./pages/Login";
 import LawyerDirectory from "./pages/LawyerDirectory";
+
 function App() {
   return (
     <Router>
       <AuthProvider>
+        {/* Temporary debug component for production troubleshooting */}
+        {process.env.NODE_ENV === 'production' && <ProductionDebug />}
         <Layout>
           <Routes>
             <Route path="/" element={<Home />} />
