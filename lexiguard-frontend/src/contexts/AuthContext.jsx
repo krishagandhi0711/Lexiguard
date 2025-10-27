@@ -21,11 +21,20 @@ export function AuthProvider({ children }) {
   // Sign in with Google
   const signInWithGoogle = async () => {
     try {
+      console.log('🔄 Starting Google Sign-In...');
+      
       // Create a new provider instance with proper scopes
       const provider = new GoogleAuthProvider();
       provider.addScope('profile');
       provider.addScope('email');
       
+      // Additional provider settings for better compatibility
+      provider.setCustomParameters({
+        prompt: 'select_account',
+        // Remove any domain restrictions
+      });
+      
+      console.log('🔄 Attempting signInWithPopup...');
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       
@@ -34,13 +43,47 @@ export function AuthProvider({ children }) {
         displayName: user.displayName,
         email: user.email,
         photoURL: user.photoURL,
-        uid: user.uid
+        uid: user.uid,
+        emailVerified: user.emailVerified
       });
       
       return user;
     } catch (error) {
       console.error("❌ Error signing in with Google:", error);
-      throw error;
+      
+      // Provide more specific error messages
+      let userFriendlyMessage = "Failed to sign in with Google. ";
+      
+      switch (error.code) {
+        case 'auth/popup-closed-by-user':
+          userFriendlyMessage += "Sign-in popup was closed. Please try again.";
+          break;
+        case 'auth/popup-blocked':
+          userFriendlyMessage += "Sign-in popup was blocked by your browser. Please allow popups and try again.";
+          break;
+        case 'auth/cancelled-popup-request':
+          userFriendlyMessage += "Another sign-in popup is already open.";
+          break;
+        case 'auth/operation-not-allowed':
+          userFriendlyMessage += "Google sign-in is not enabled for this app.";
+          break;
+        case 'auth/network-request-failed':
+          userFriendlyMessage += "Network error. Please check your connection and try again.";
+          break;
+        case 'auth/invalid-api-key':
+          userFriendlyMessage += "Invalid API key configuration.";
+          break;
+        case 'auth/app-not-authorized':
+          userFriendlyMessage += "This app is not authorized to use Firebase Authentication.";
+          break;
+        default:
+          userFriendlyMessage += `Error: ${error.message}`;
+      }
+      
+      // Create a custom error with user-friendly message
+      const customError = new Error(userFriendlyMessage);
+      customError.originalError = error;
+      throw customError;
     }
   };
 

@@ -21,12 +21,23 @@ export default function Login() {
     try {
       setError('');
       setLoading(true);
+      
+      console.log('🔄 Login: Starting Google Sign-In process...');
       await signInWithGoogle();
+      
+      console.log('✅ Login: Sign-in successful, redirecting...');
       // Redirect to the page they tried to access or upload page
       navigate(from, { replace: true });
     } catch (error) {
-      console.error('Failed to sign in:', error);
-      setError('Failed to sign in with Google. Please try again.');
+      console.error('❌ Login: Failed to sign in:', error);
+      
+      // Display the user-friendly error message
+      setError(error.message || 'Failed to sign in with Google. Please try again.');
+      
+      // Additional debugging for development
+      if (error.originalError) {
+        console.error('❌ Original error:', error.originalError);
+      }
     } finally {
       setLoading(false);
     }
