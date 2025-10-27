@@ -19,6 +19,7 @@
 .env.production.local
 
 # Environment variables (Keep .env for development, but not production secrets)
+.env
 .env.local
 .env.development.local
 .env.test.local
