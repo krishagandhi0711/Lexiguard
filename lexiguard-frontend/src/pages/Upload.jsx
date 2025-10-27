@@ -15,6 +15,9 @@ import {
 import { motion } from "framer-motion";
 import { saveAnalysis } from "../services/firestoreService";
 
+// Use environment variable for API base URL (secure for production)
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
 export default function Upload() {
   const [file, setFile] = useState(null);
   const [textInput, setTextInput] = useState("");
@@ -63,7 +66,7 @@ export default function Upload() {
     try {
       console.log('📤 Uploading file for async processing...');
       
-      const res = await fetch("http://localhost:8000/analyze-file-async", {
+      const res = await fetch(`${BASE_URL}/analyze-file-async`, {
         method: "POST",
         body: formData,
       });
@@ -121,8 +124,8 @@ export default function Upload() {
     try {
       const endpoint =
         analysisType === "detailed"
-          ? "http://localhost:8000/analyze-clauses"
-          : "http://localhost:8000/analyze-file";
+          ? `${BASE_URL}/analyze-clauses`
+          : `${BASE_URL}/analyze-file`;
 
       const res = await fetch(endpoint, {
         method: "POST",
