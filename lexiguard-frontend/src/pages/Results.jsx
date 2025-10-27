@@ -10,6 +10,9 @@ import { getAnalysisById } from "../services/firestoreService";
 import LanguageSelector from "../components/LanguageSelector";
 import { getTranslation, requestTranslation } from "../services/firestoreService";
 
+// Use environment variable for API base URL (secure for production)
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
 import {
   AlertTriangle,
   CheckCircle,
@@ -416,7 +419,7 @@ const handleLanguageChange = async (languageCode) => {
     setNegotiationEmail("");
 
     try {
-      const res = await fetch("http://localhost:8000/draft-negotiation", {
+      const res = await fetch(`${BASE_URL}/draft-negotiation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clause: clauseText }),
@@ -475,7 +478,7 @@ const handleLanguageChange = async (languageCode) => {
         riskSummary = `Identified ${risks.length} potential risks in the document.`;
       }
 
-      const res = await fetch("http://localhost:8000/draft-document-email", {
+      const res = await fetch(`${BASE_URL}/draft-document-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -524,7 +527,7 @@ const handleLanguageChange = async (languageCode) => {
         riskSummary = `Identified ${risks.length} potential risks in the document.`;
       }
 
-      const res = await fetch("http://localhost:8000/send-document-review", {
+      const res = await fetch(`${BASE_URL}/send-document-review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 

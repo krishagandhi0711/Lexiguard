@@ -1,4 +1,25 @@
-﻿google-cloud-pubsub>=2.18.0
+﻿# Core Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Google Cloud Services
+google-cloud-pubsub>=2.18.0
 google-cloud-firestore>=2.13.0
+google-cloud-dlp>=3.15.0
+google-cloud-storage>=2.10.0
+google-generativeai>=0.3.0
 functions-framework>=3.5.0
 cloudevents>=1.9.0
+
+# Document Processing
+PyPDF2>=3.0.0
+python-docx>=0.8.11
+reportlab>=4.0.0
+
+# Environment & Utils
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# Translation Support
+google-cloud-translate>=3.15.0

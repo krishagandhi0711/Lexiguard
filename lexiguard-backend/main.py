@@ -53,11 +53,17 @@ app = FastAPI(
 )
 
 # --- 3. ENABLE CORS ---
+# Configure CORS for production deployment (Cloud Run + Vercel)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "http://localhost:3001", 
+        "https://lexiguard-backend-372716482731.asia-south1.run.app",  # Your Cloud Run domain
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Allow all Vercel subdomains
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
