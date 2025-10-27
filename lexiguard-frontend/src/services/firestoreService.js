@@ -15,6 +15,9 @@ import {
 import { db } from '../firebase/config';
 import { onSnapshot } from 'firebase/firestore';
 
+// Use environment variable for API base URL
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
 const COLLECTION_NAME = 'userAnalyses';
 
 /**
@@ -398,7 +401,7 @@ export const requestTranslation = async (analysisId, language, userId) => {
     });
     
     // Build URL with query parameters (matching your backend)
-    const url = `http://localhost:8000/translate/${analysisId}?language=${language}&user_id=${userId}`;
+    const url = `${BASE_URL}/translate/${analysisId}?language=${language}&user_id=${userId}`;
     console.log('📡 API URL:', url);
     
     const response = await fetch(url, {
@@ -477,7 +480,7 @@ export const requestTranslation = async (analysisId, language, userId) => {
  */
 export const getSupportedLanguages = async () => {
   try {
-    const response = await fetch('http://localhost:8000/supported-languages');
+    const response = await fetch(`${BASE_URL}/supported-languages`);
     
     if (!response.ok) {
       throw new Error('Failed to fetch supported languages');

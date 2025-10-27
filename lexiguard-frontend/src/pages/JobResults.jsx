@@ -5,6 +5,9 @@ import { Button } from "../components/ui/button";
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
 import JobStatusTracker from '../components/JobStatusTracker';
 
+// Use environment variable for API base URL
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
 export default function JobResults() {
   const { jobId } = useParams();
   const location = useLocation();
@@ -36,7 +39,7 @@ export default function JobResults() {
         console.log(`🔄 Polling job status (${pollCount}/${MAX_POLLS}):`, jobId);
         
         const res = await fetch(
-          `http://localhost:8000/job-status/${jobId}?user_id=${userId}`
+          `${BASE_URL}/job-status/${jobId}?user_id=${userId}`
         );
 
         if (!res.ok) {
@@ -101,7 +104,7 @@ export default function JobResults() {
       console.log(`📥 Fetching analysis results: ${analysisId}`);
       
       const res = await fetch(
-        `http://localhost:8000/analysis-result/${analysisId}?user_id=${userId}`
+        `${BASE_URL}/analysis-result/${analysisId}?user_id=${userId}`
       );
 
       if (!res.ok) {
