@@ -1751,6 +1751,33 @@ return (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.58 }}
+            >
+              <Card className="border-none bg-gradient-to-br from-orange-900/40 to-red-900/40 backdrop-blur-md shadow-2xl">
+                <CardHeader className="border-b border-gray-700/50">
+                  <CardTitle className="flex items-center gap-2 text-white text-lg">
+                    <Scale className="w-5 h-5 text-orange-400" />
+                    Need Legal Advice?
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4">
+                  <p className="text-gray-200 text-sm mb-4">
+                    Connect with verified lawyers who can help you understand and negotiate this document.
+                  </p>
+                  <Button
+                    onClick={() => navigate("/lawyers")}
+                    className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white"
+                  >
+                    <Scale className="w-4 h-4 mr-2" />
+                    Ask a Lawyer
+                  </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6 }}
             >
               <RoleAwareChatAgent
