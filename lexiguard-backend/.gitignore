@@ -1,6 +1,6 @@
 .env
 lexiguard-backend/*.json
-
+env-backend.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

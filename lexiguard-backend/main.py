@@ -1,4 +1,4 @@
-# main.py - FIXED VERSION
+﻿# main.py - FIXED VERSION
 
 import os
 import json
@@ -43,7 +43,7 @@ if credentials_path and not os.path.isabs(credentials_path):
     # Convert relative path to absolute path
     credentials_path = os.path.join(os.path.dirname(__file__), credentials_path)
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
-    logger.info(f"✅ Google Cloud credentials set to: {credentials_path}")
+    logger.info(f"âœ… Google Cloud credentials set to: {credentials_path}")
 
 # --- 2. INITIALIZE FASTAPI APP ---
 app = FastAPI(
@@ -55,22 +55,27 @@ app = FastAPI(
 # --- 3. ENABLE CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://lexiguard-frontend-372716482731.asia-south1.run.app",
+        "http://localhost:3000",
+        "http://localhost:8000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # --- 4. CONFIGURE GOOGLE GEMINI ---
 API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
-    logger.error("❌ GOOGLE_API_KEY not found in .env file!")
+    logger.error("âŒ GOOGLE_API_KEY not found in .env file!")
     logger.error("Please add GOOGLE_API_KEY=your_api_key to your .env file")
     raise Exception("GOOGLE_API_KEY is required for Gemini API access")
 else:
     # Configure Gemini with explicit API key to avoid credential conflicts
     genai.configure(api_key=API_KEY)
-    logger.info(f"✅ Gemini API configured with API key: {API_KEY[:8]}...")
+    logger.info(f"âœ… Gemini API configured with API key: {API_KEY[:8]}...")
 
 safety_settings = {
     "HARM_CATEGORY_HARASSMENT": "block_none",
@@ -90,7 +95,7 @@ def initialize_gemini_model():
     try:
         # Use fixed Gemini 2.5 Flash model for consistent performance
         MODEL_NAME = "models/gemini-2.5-flash"
-        logger.info(f"� Initializing fixed model: {MODEL_NAME}")
+        logger.info(f"ï¿½ Initializing fixed model: {MODEL_NAME}")
         
         try:
             # Initialize Gemini 2.5 Flash directly
@@ -101,44 +106,44 @@ def initialize_gemini_model():
             
             if test_response and test_response.text:
                 model = test_model
-                logger.info(f"✅ Gemini 2.5 Flash initialized successfully: {MODEL_NAME}")
-                logger.info(f"✅ Test response: {test_response.text[:50]}...")
+                logger.info(f"âœ… Gemini 2.5 Flash initialized successfully: {MODEL_NAME}")
+                logger.info(f"âœ… Test response: {test_response.text[:50]}...")
                 return True
             else:
                 raise Exception("Model test failed - no response received")
                 
         except Exception as flash_error:
-            logger.warning(f"❌ Gemini 2.5 Flash failed: {flash_error}")
+            logger.warning(f"âŒ Gemini 2.5 Flash failed: {flash_error}")
             
             # Fallback to models/ prefix format if needed
             try:
                 MODEL_NAME = "models/gemini-flash-latest"
-                logger.info(f"🔄 Trying fallback format: {MODEL_NAME}")
+                logger.info(f"ðŸ”„ Trying fallback format: {MODEL_NAME}")
                 test_model = genai.GenerativeModel(MODEL_NAME, safety_settings=safety_settings)
                 test_response = test_model.generate_content("Hello! Please respond with 'Working'.")
                 
                 if test_response and test_response.text:
                     model = test_model
-                    logger.info(f"✅ Gemini 2.5 Flash (fallback format) initialized: {MODEL_NAME}")
+                    logger.info(f"âœ… Gemini 2.5 Flash (fallback format) initialized: {MODEL_NAME}")
                     return True
                     
             except Exception as fallback_error:
-                logger.error(f"❌ Both Gemini 2.5 Flash formats failed: {fallback_error}")
+                logger.error(f"âŒ Both Gemini 2.5 Flash formats failed: {fallback_error}")
                 return False
         
         # If we reach here, no model worked
-        logger.error("❌ No working Gemini model found!")
+        logger.error("âŒ No working Gemini model found!")
         logger.error("Available models found:", available_models)
         return False
         
     except Exception as e:
-        logger.error(f"❌ Failed to initialize any Gemini model: {e}")
+        logger.error(f"âŒ Failed to initialize any Gemini model: {e}")
         return False
 
 # Initialize the model
 success = initialize_gemini_model()
 if not success:
-    logger.error("❌ CRITICAL: Gemini model initialization failed completely")
+    logger.error("âŒ CRITICAL: Gemini model initialization failed completely")
     logger.error("Possible solutions:")
     logger.error("  1. Verify your GOOGLE_API_KEY is correct and has Gemini access")
     logger.error("  2. Check if you have billing enabled for Gemini API")
@@ -209,17 +214,17 @@ from translation_utils import (
 # Initialize Firestore client for translations
 try:
     firestore_client = firestore.Client()
-    logger.info("✅ Firestore client initialized for translations")
+    logger.info("âœ… Firestore client initialized for translations")
 except Exception as e:
-    logger.warning(f"⚠️ Firestore client initialization failed: {e}")
+    logger.warning(f"âš ï¸ Firestore client initialization failed: {e}")
     firestore_client = None
 
 # Initialize Cloud Storage client for async processing
 try:
     storage_client_gcs = gcs_storage.Client()
-    logger.info("✅ Google Cloud Storage client initialized for async processing")
+    logger.info("âœ… Google Cloud Storage client initialized for async processing")
 except Exception as e:
-    logger.warning(f"⚠️ Cloud Storage client initialization failed: {e}")
+    logger.warning(f"âš ï¸ Cloud Storage client initialization failed: {e}")
     storage_client_gcs = None
 
 # Configuration for async processing
@@ -273,14 +278,14 @@ async def translate_analysis(
     Translate an existing analysis result (summary + risks + clauses)
     into the requested target language using Google Cloud Translation API.
     """
-    logger.info(f"🔄 Translation request: {analysis_id} -> {language} (user: {user_id})")
+    logger.info(f"ðŸ”„ Translation request: {analysis_id} -> {language} (user: {user_id})")
     
     if not firestore_client:
-        logger.error("❌ Firestore not initialized")
+        logger.error("âŒ Firestore not initialized")
         raise HTTPException(status_code=500, detail="Firestore not initialized")
     
     if language not in SUPPORTED_LANGUAGES:
-        logger.error(f"❌ Unsupported language: {language}")
+        logger.error(f"âŒ Unsupported language: {language}")
         available = ", ".join(list(SUPPORTED_LANGUAGES.keys())[:10])
         raise HTTPException(
             status_code=400, 
@@ -293,22 +298,22 @@ async def translate_analysis(
         doc = doc_ref.get()
         
         if not doc.exists:
-            logger.error(f"❌ Analysis not found: {analysis_id}")
+            logger.error(f"âŒ Analysis not found: {analysis_id}")
             raise HTTPException(status_code=404, detail="Analysis not found")
 
         analysis_data = doc.to_dict()
         
         # Security check - verify user owns this analysis
         if analysis_data.get("userID") != user_id:
-            logger.error(f"❌ Unauthorized access attempt by {user_id}")
+            logger.error(f"âŒ Unauthorized access attempt by {user_id}")
             raise HTTPException(status_code=403, detail="Unauthorized access to this analysis")
         
-        logger.info(f"✅ Analysis found, checking for cached translation...")
+        logger.info(f"âœ… Analysis found, checking for cached translation...")
         existing_translations = analysis_data.get("translations", {})
 
         # If already translated, return cached version
         if language in existing_translations:
-            logger.info(f"✅ Found cached translation for {language}")
+            logger.info(f"âœ… Found cached translation for {language}")
             cached = existing_translations[language]
             
             # Ensure we return the correct structure
@@ -322,15 +327,15 @@ async def translate_analysis(
                     "suggestions": cached.get("suggestions", [])
                 }
             }
-            logger.info(f"📦 Returning cached translation with {len(str(response))} bytes")
+            logger.info(f"ðŸ“¦ Returning cached translation with {len(str(response))} bytes")
             return response
 
-        logger.info(f"🔄 No cache found, generating new translation for {language}")
+        logger.info(f"ðŸ”„ No cache found, generating new translation for {language}")
 
         # Use the translate_analysis_content function from translation_utils
         translated_content = translate_analysis_content(analysis_data, language)
         
-        logger.info(f"✅ Translation completed: {translated_content.keys()}")
+        logger.info(f"âœ… Translation completed: {translated_content.keys()}")
         
         # Validate that translation has content
         has_content = (
@@ -340,7 +345,7 @@ async def translate_analysis(
         )
         
         if not has_content:
-            logger.error(f"❌ Translation returned empty content")
+            logger.error(f"âŒ Translation returned empty content")
             logger.error(f"Translation keys: {translated_content.keys()}")
             raise HTTPException(
                 status_code=500, 
@@ -351,12 +356,12 @@ async def translate_analysis(
         try:
             existing_translations[language] = translated_content
             doc_ref.update({"translations": existing_translations})
-            logger.info(f"✅ Translation cached in Firestore for {language}")
+            logger.info(f"âœ… Translation cached in Firestore for {language}")
         except Exception as e:
-            logger.warning(f"⚠️ Failed to cache translation: {e}")
+            logger.warning(f"âš ï¸ Failed to cache translation: {e}")
             # Continue even if caching fails
 
-        logger.info(f"✅ Translation completed successfully for {language}")
+        logger.info(f"âœ… Translation completed successfully for {language}")
         
         response = {
             "language": language,
@@ -364,17 +369,17 @@ async def translate_analysis(
             "translated_content": translated_content
         }
         
-        logger.info(f"📦 Returning new translation with {len(str(response))} bytes")
+        logger.info(f"ðŸ“¦ Returning new translation with {len(str(response))} bytes")
         return response
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Translation failed for {analysis_id}: {e}")
-        logger.error(f"❌ Error type: {type(e).__name__}")
-        logger.error(f"❌ Error details: {str(e)}")
+        logger.error(f"âŒ Translation failed for {analysis_id}: {e}")
+        logger.error(f"âŒ Error type: {type(e).__name__}")
+        logger.error(f"âŒ Error details: {str(e)}")
         import traceback
-        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        logger.error(f"âŒ Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
 
 
@@ -695,7 +700,7 @@ def analyze_text_internal(text: str):
     "summary": summary,
     "risks": risks,
     "pii_redacted": changed,
-    "redacted_text": redacted_text  # ✅ ADD THIS LINE
+    "redacted_text": redacted_text  # âœ… ADD THIS LINE
 }
     except Exception as e:
         logger.error(f"Error in analyze_text_internal: {e}")
@@ -719,7 +724,7 @@ def analyze_clauses_detailed_internal(text: str):
         return {
     "risks": risks, 
     "pii_redacted": changed,
-    "redacted_text": redacted_text  # ✅ ADD THIS LINE
+    "redacted_text": redacted_text  # âœ… ADD THIS LINE
 }
     except Exception as e:
         print(f"Error in detailed clause analysis: {str(e)}")
@@ -794,7 +799,7 @@ async def analyze_file(file: UploadFile = File(None), text: str = Form(None)):
     
     result = analyze_text_internal(document_text)
     
-    # ✅ GENERATE DYNAMIC SUGGESTIONS using AI
+    # âœ… GENERATE DYNAMIC SUGGESTIONS using AI
     risks_list = result.get("risks", {}).get("risks", [])
     suggestions = []
     
@@ -861,7 +866,7 @@ Do NOT include any markdown, code blocks, or extra text - just the JSON array.
     
     # Add privacy notice if PII was redacted
     if result.get("pii_redacted", False):
-        response["privacy_notice"] = "✓ Your Personal Data Has Been Redacted for Privacy."
+        response["privacy_notice"] = "âœ“ Your Personal Data Has Been Redacted for Privacy."
     
     return response
 
@@ -945,7 +950,7 @@ async def analyze_clauses(file: UploadFile = File(None), text: str = Form(None))
         elif filename.endswith(".docx"):
             document_text = extract_text_from_docx(file.file)
             file_type = "DOCX"
-        elif filename.endswith(".txt"):  # ✅ ADD TXT SUPPORT
+        elif filename.endswith(".txt"):  # âœ… ADD TXT SUPPORT
             document_text = extract_text_from_txt(file.file)
             file_type = "TXT"
         else:
@@ -953,7 +958,7 @@ async def analyze_clauses(file: UploadFile = File(None), text: str = Form(None))
         filename_display = file.filename
     elif text:
         document_text = text
-        file_type = "Text"  # ✅ ADD file_type for manual text input
+        file_type = "Text"  # âœ… ADD file_type for manual text input
         filename_display = "Text Input"
     else:
         raise HTTPException(status_code=400, detail="No file or text provided")
@@ -975,7 +980,7 @@ async def analyze_clauses(file: UploadFile = File(None), text: str = Form(None))
     
     # Add privacy notice if PII was redacted
     if result.get("pii_redacted", False):
-        response["privacy_notice"] = "✓ Your Personal Data Has Been Redacted for Privacy."
+        response["privacy_notice"] = "âœ“ Your Personal Data Has Been Redacted for Privacy."
     
     return response
 
@@ -1149,7 +1154,7 @@ The LexiGuard Team
 
 @app.get("/")
 def root():
-    return {"message": "LexiGuard API is running successfully 🚀"}
+    return {"message": "LexiGuard API is running successfully ðŸš€"}
 
 # --- ENHANCED CHAT ENDPOINT WITH ROLE-AWARE FUNCTIONALITY ---
 @app.post("/chat")
@@ -1331,7 +1336,7 @@ async def analyze_file_async(
     userId: str = Form(...)  # Get from Firebase Auth on frontend
 ):
     """
-    🚀 NEW ASYNC ENDPOINT for queued processing
+    ðŸš€ NEW ASYNC ENDPOINT for queued processing
     
     Uploads file to Cloud Storage and creates a job for background processing.
     Returns immediately with job ID (non-blocking).
@@ -1339,7 +1344,7 @@ async def analyze_file_async(
     Frontend should poll /job-status/{jobId} or use Firestore real-time listener.
     """
     try:
-        logger.info(f"📤 Async upload request from user: {userId}")
+        logger.info(f"ðŸ“¤ Async upload request from user: {userId}")
         logger.info(f"   Document: {documentTitle}")
         logger.info(f"   Analysis: {analysisType}")
         
@@ -1393,7 +1398,7 @@ async def analyze_file_async(
         safe_filename = file.filename.replace(' ', '_')  # Remove spaces
         gcs_path = f"uploads/{userId}/{timestamp}_{safe_filename}"
         
-        logger.info(f"📤 Uploading to GCS: gs://{GCS_BUCKET_NAME}/{gcs_path}")
+        logger.info(f"ðŸ“¤ Uploading to GCS: gs://{GCS_BUCKET_NAME}/{gcs_path}")
         
         # Upload file to Cloud Storage
         try:
@@ -1406,10 +1411,10 @@ async def analyze_file_async(
                 content_type=file.content_type
             )
             
-            logger.info(f"✅ File uploaded to Cloud Storage successfully")
+            logger.info(f"âœ… File uploaded to Cloud Storage successfully")
             
         except Exception as upload_error:
-            logger.error(f"❌ GCS upload failed: {upload_error}")
+            logger.error(f"âŒ GCS upload failed: {upload_error}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to upload file to Cloud Storage: {str(upload_error)}"
@@ -1435,15 +1440,15 @@ async def analyze_file_async(
             job_ref = firestore_client.collection('analysisJobs').document(job_id)
             job_ref.set(job_data)
             
-            logger.info(f"✅ Job created in Firestore: {job_id}")
+            logger.info(f"âœ… Job created in Firestore: {job_id}")
             
         except Exception as firestore_error:
-            logger.error(f"❌ Firestore job creation failed: {firestore_error}")
+            logger.error(f"âŒ Firestore job creation failed: {firestore_error}")
             
             # Clean up uploaded file
             try:
                 blob.delete()
-                logger.info("🧹 Cleaned up uploaded file after Firestore error")
+                logger.info("ðŸ§¹ Cleaned up uploaded file after Firestore error")
             except:
                 pass
             
@@ -1466,7 +1471,7 @@ async def analyze_file_async(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Async upload error: {e}")
+        logger.error(f"âŒ Async upload error: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Upload failed: {str(e)}"
@@ -1523,7 +1528,7 @@ async def get_job_status(job_id: str, user_id: str = Query(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error fetching job status: {e}")
+        logger.error(f"âŒ Error fetching job status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch job status: {str(e)}")
 
 
@@ -1569,7 +1574,7 @@ async def get_analysis_result(analysis_id: str, user_id: str = Query(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error fetching analysis result: {e}")
+        logger.error(f"âŒ Error fetching analysis result: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch analysis: {str(e)}")
 
 
@@ -1610,6 +1615,6 @@ async def test_gemini():
 # --- RUN SERVER ---
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))  # Default port 8000 for local development
+    port = int(os.environ.get("PORT", 8080))  # âœ… Changed from 8000 to 8080
     logger.info(f"Starting server on host=0.0.0.0, port={port}")
     uvicorn.run("main:app", host="0.0.0.0", port=port, log_level="info")

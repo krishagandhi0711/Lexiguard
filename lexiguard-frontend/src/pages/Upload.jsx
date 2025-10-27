@@ -15,6 +15,8 @@ import {
 import { motion } from "framer-motion";
 import { saveAnalysis } from "../services/firestoreService";
 
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+
 export default function Upload() {
   const [file, setFile] = useState(null);
   const [textInput, setTextInput] = useState("");
@@ -63,11 +65,12 @@ export default function Upload() {
     try {
       console.log('📤 Uploading file for async processing...');
       
-      const res = await fetch("http://localhost:8000/analyze-file-async", {
+      console.log('🔗 API URL:', `${API_BASE_URL}/analyze-file-async`);
+      
+      const res = await fetch(`${API_BASE_URL}/analyze-file-async`, {
         method: "POST",
         body: formData,
       });
-
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.detail || `HTTP ${res.status}`);
@@ -121,8 +124,10 @@ export default function Upload() {
     try {
       const endpoint =
         analysisType === "detailed"
-          ? "http://localhost:8000/analyze-clauses"
-          : "http://localhost:8000/analyze-file";
+          ? `${API_BASE_URL}/analyze-clauses`
+          : `${API_BASE_URL}/analyze-file`;
+
+      console.log('🔗 API URL:', endpoint);
 
       const res = await fetch(endpoint, {
         method: "POST",

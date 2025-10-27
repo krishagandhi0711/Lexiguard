@@ -5,6 +5,8 @@ import { Button } from "../components/ui/button";
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
 import JobStatusTracker from '../components/JobStatusTracker';
 
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+
 export default function JobResults() {
   const { jobId } = useParams();
   const location = useLocation();
@@ -35,9 +37,10 @@ export default function JobResults() {
         pollCount++;
         console.log(`🔄 Polling job status (${pollCount}/${MAX_POLLS}):`, jobId);
         
-        const res = await fetch(
-          `http://localhost:8000/job-status/${jobId}?user_id=${userId}`
-        );
+        const url = `${API_BASE_URL}/job-status/${jobId}?user_id=${userId}`;
+        console.log('🔗 API URL:', url);
+        
+        const res = await fetch(url);
 
         if (!res.ok) {
           const errorData = await res.json();
@@ -100,9 +103,10 @@ export default function JobResults() {
     try {
       console.log(`📥 Fetching analysis results: ${analysisId}`);
       
-      const res = await fetch(
-        `http://localhost:8000/analysis-result/${analysisId}?user_id=${userId}`
-      );
+      const url = `${API_BASE_URL}/analysis-result/${analysisId}?user_id=${userId}`;
+      console.log('🔗 API URL:', url);
+      
+      const res = await fetch(url);
 
       if (!res.ok) {
         const errorData = await res.json();

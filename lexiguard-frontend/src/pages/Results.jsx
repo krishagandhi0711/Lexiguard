@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+
 const KEYWORDS_REGEX = /\b(agreement|contract|clause|liability|termination|penalty|indemnity|renewal)\b/gi;
 const ACTIONABLE_REGEX = /\b(\d+\s*(days?|weeks?|months?|years?)|due by|deadline|penalty|fine|termination|payment of \$?\d+|effective date|must|shall|obligated|required)\b/gi;
 
@@ -416,11 +418,11 @@ const handleLanguageChange = async (languageCode) => {
     setNegotiationEmail("");
 
     try {
-      const res = await fetch("http://localhost:8000/draft-negotiation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clause: clauseText }),
-      });
+      const res = await fetch(`${API_BASE_URL}/draft-negotiation`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ clause: clauseText }),
+});
 
       const data = await res.json();
       setNegotiationEmail(data.negotiation_email || "Could not generate email.");
@@ -475,14 +477,14 @@ const handleLanguageChange = async (languageCode) => {
         riskSummary = `Identified ${risks.length} potential risks in the document.`;
       }
 
-      const res = await fetch("http://localhost:8000/draft-document-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          document_summary: documentText,
-          risk_summary: riskSummary,
-        }),
-      });
+      const res = await fetch(`${API_BASE_URL}/draft-document-email`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ 
+    document_summary: documentText,
+    risk_summary: riskSummary,
+  }),
+});
 
       const data = await res.json();
       setDocumentEmail(data.document_email || data.email || "Email generated successfully.");
@@ -524,17 +526,17 @@ const handleLanguageChange = async (languageCode) => {
         riskSummary = `Identified ${risks.length} potential risks in the document.`;
       }
 
-      const res = await fetch("http://localhost:8000/send-document-review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          filename: analysis.filename || "Document",
-          document_summary: documentText,
-          risk_summary: riskSummary,
-          clauses: clauses,
-          user_email: userEmail,
-        }),
-      });
+      const res = await fetch(`${API_BASE_URL}/send-document-review`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ 
+    filename: analysis.filename || "Document",
+    document_summary: documentText,
+    risk_summary: riskSummary,
+    clauses: clauses,
+    user_email: userEmail,
+  }),
+});
 
       const data = await res.json();
       
@@ -1720,7 +1722,32 @@ return (
                 </CardContent>
               </Card>
             </motion.div>
-
+<motion.div
+  initial={{ opacity: 0, x: 20 }}
+  animate={{ opacity: 1, x: 0 }}
+  transition={{ delay: 0.58 }}
+>
+  <Card className="border-none bg-gradient-to-br from-orange-900/40 to-red-900/40 backdrop-blur-md shadow-2xl">
+    <CardHeader className="border-b border-gray-700/50">
+      <CardTitle className="flex items-center gap-2 text-white text-lg">
+        <Scale className="w-5 h-5 text-orange-400" />
+        Need Legal Advice?
+      </CardTitle>
+    </CardHeader>
+    <CardContent className="p-4">
+      <p className="text-gray-200 text-sm mb-4">
+        Connect with verified lawyers who can help you understand and negotiate this document.
+      </p>
+      <Button
+        onClick={() => navigate("/lawyers")}
+        className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white"
+      >
+        <Scale className="w-4 h-4 mr-2" />
+        Ask a Lawyer
+      </Button>
+    </CardContent>
+  </Card>
+</motion.div>
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
