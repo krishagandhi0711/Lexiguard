@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import ProductionDebug from "./components/ProductionDebug"; // Temporary debug component
 import Home from "./pages/Home";
 import Upload from "./pages/Upload";
 import Results from "./pages/Results";
@@ -20,8 +19,6 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        {/* Temporary debug component for production troubleshooting */}
-        {process.env.NODE_ENV === 'production' && <ProductionDebug />}
         <Layout>
           <Routes>
             <Route path="/" element={<Home />} />

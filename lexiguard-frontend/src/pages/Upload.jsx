@@ -18,6 +18,12 @@ import { saveAnalysis } from "../services/firestoreService";
 // Use environment variable for API base URL (secure for production)
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Validate environment variables
+if (!BASE_URL) {
+  console.error('❌ Missing REACT_APP_BACKEND_URL environment variable');
+  console.error('Make sure to set it in Vercel Dashboard → Settings → Environment Variables');
+}
+
 export default function Upload() {
   const [file, setFile] = useState(null);
   const [textInput, setTextInput] = useState("");
@@ -132,6 +138,10 @@ export default function Upload() {
         body: formData,
       });
 
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
       const data = await res.json();
 
       if (data.error) {
@@ -156,9 +166,17 @@ export default function Upload() {
         state: { analysis: data, analysisType, analysisId } 
       });
     } catch (error) {
-      console.error(error);
+      console.error('Document analysis error:', error);
       setLoading(false);
-      alert("Error analyzing document");
+      
+      // Provide more specific error messages
+      if (error.message.includes('Failed to fetch')) {
+        alert("Unable to connect to the server. Please check your internet connection and try again.");
+      } else if (error.message.includes('HTTP error')) {
+        alert(`Server error: ${error.message}. Please try again later.`);
+      } else {
+        alert("Error analyzing document. Please try again.");
+      }
     }
   };
 
