@@ -1,6 +1,6 @@
 # ⚙️ LexiGuard Backend
 
-The **LexiGuard Backend** is a powerful FastAPI-based REST API that powers the LexiGuard legal document analysis platform. It leverages Google's Gemini AI for intelligent contract analysis, Cloud DLP for PII redaction, and Cloud Firestore for persistent storage.
+The **LexiGuard Backend** is a powerful FastAPI-based REST API that powers the LexiGuard legal document analysis platform. It leverages Google's Gemini 2.5 Flash for intelligent contract analysis, Cloud DLP for PII redaction, Cloud Firestore for persistent storage, and Cloud Pub/Sub for asynchronous processing.
 
 ---
 
@@ -10,18 +10,19 @@ The **LexiGuard Backend** is a powerful FastAPI-based REST API that powers the L
 - **📄 Document Processing** - Supports PDF, DOCX, and plain text formats
 - **🤖 AI-Powered Analysis** - Uses Google Gemini 2.5 Flash for contract analysis
 - **🛡️ PII Redaction** - Automatic removal of 7+ types of sensitive information
-- **💬 Context-Aware Chat** - Conversational Q&A about legal documents
+- **💬 Role-Aware Chat** - Intelligent conversational Q&A with role discovery and persona-based responses
 - **✉️ Email Generation** - Professional negotiation emails and PDF reports
 - **📊 Two Analysis Modes**:
-  - **Standard**: Quick overview with risk summary
-  - **Detailed**: Comprehensive clause-by-clause breakdown
+  - **Standard**: Quick overview with risk summary and AI-generated suggestions
+  - **Detailed**: Comprehensive clause-by-clause breakdown with impact assessment
 - **🔒 Privacy-First Design** - Only stores redacted content in Firestore
 
 ### Advanced Features
-- **🌐 Multi-Language Support** - Translate documents and analyses (Google Translate API)
+- **🌐 Multi-Language Support** - Translate analyses to 100+ languages (Google Translate API)
 - **📧 Gmail Integration** - Send PDF reports via SMTP
-- **🔐 Firebase Authentication** - Token verification support
-- **⚡ Async Processing** - Background job processing with Cloud Pub/Sub
+- **⚡ Async Processing** - Background job processing with Cloud Storage and Pub/Sub
+- **🔐 Firebase Integration** - User authentication and data isolation
+- **📈 Real-time Job Tracking** - Poll or stream job status updates via Firestore
 
 ---
 
@@ -37,7 +38,7 @@ The **LexiGuard Backend** is a powerful FastAPI-based REST API that powers the L
 | **Storage** | Google Cloud Storage |
 | **Translation** | Google Cloud Translate API |
 | **Email** | Gmail SMTP, ReportLab (PDF) |
-| **Auth** | Firebase Admin SDK |
+| **Async Processing** | Cloud Pub/Sub |
 
 ---
 
@@ -49,7 +50,7 @@ The **LexiGuard Backend** is a powerful FastAPI-based REST API that powers the L
 - **Google Cloud Account** with billing enabled
 - **Google API Keys**:
   - Gemini API Key ([Get here](https://makersuite.google.com/app/apikey))
-  - Service Account JSON (for DLP, Firestore, etc.)
+  - Service Account JSON (for DLP, Firestore, Translation, Storage)
 - **Gmail App Password** (for email features)
 
 ### Installation
@@ -95,12 +96,12 @@ The **LexiGuard Backend** is a powerful FastAPI-based REST API that powers the L
    
    Or using uvicorn directly:
    ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   uvicorn main:app --reload --host 0.0.0.0 --port 8080
    ```
 
 7. **Access the API**
    
-   Open your browser: **http://localhost:8000/docs**
+   Open your browser: **http://localhost:8080/docs**
 
 ---
 
@@ -119,11 +120,11 @@ GOOGLE_API_KEY=your_gemini_api_key_here
 # Your Google Cloud Project ID
 GOOGLE_CLOUD_PROJECT=your_gcp_project_id
 
-# Path to Service Account JSON file (for DLP, Firestore, Translation)
+# Path to Service Account JSON file (for DLP, Firestore, Translation, Storage)
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account-key.json
 
 # ===== STORAGE CONFIGURATION =====
-# Google Cloud Storage bucket name (for document storage)
+# Google Cloud Storage bucket name (for async document processing)
 GCS_BUCKET_NAME=lexiguard-documents
 
 # ===== EMAIL CONFIGURATION =====
@@ -152,6 +153,7 @@ GMAIL_APP_PASSWORD=abcdefghijklmnop
    - Cloud Translation API User
    - Cloud Firestore User
    - Cloud Storage Admin
+   - Pub/Sub Publisher (for async processing)
 6. Click "Create Key" → Choose JSON
 7. Download the file and save to `lexiguard-backend/`
 8. Update `GOOGLE_APPLICATION_CREDENTIALS` path in `.env`
@@ -171,7 +173,18 @@ In [Google Cloud Console](https://console.cloud.google.com/), enable these APIs:
 - ✅ Cloud Translation API
 - ✅ Cloud Firestore API
 - ✅ Cloud Storage API
-- ✅ Cloud Pub/Sub API (for async processing)
+- ✅ Cloud Pub/Sub API
+- ✅ Generative AI API (Gemini)
+
+### Step 4: Create Cloud Storage Bucket
+
+```bash
+# Create bucket for document uploads
+gsutil mb -l asia-south1 gs://lexiguard-documents
+
+# Set up CORS if needed
+gsutil cors set cors.json gs://lexiguard-documents
+```
 
 ---
 
@@ -188,8 +201,8 @@ lexiguard-backend/
 ├── .gitignore
 │
 ├── translation_utils.py         # Translation service utilities
-├── dlp_processor.py             # PII redaction logic
-├── gemini_analyzer.py           # Gemini AI integration
+├── dlp_processor.py             # PII redaction logic (optional)
+├── gemini_analyzer.py           # Gemini AI integration (optional)
 ├── worker.py                    # Background job processor
 │
 └── uploads/                     # Temporary file storage (auto-created)
@@ -201,18 +214,20 @@ lexiguard-backend/
 
 ### Core Analysis Endpoints
 
-#### 1. Analyze Document (Standard)
+#### 1. Analyze Document (Standard) - Synchronous
 ```http
 POST /analyze-file
 Content-Type: multipart/form-data
 
 Parameters:
-- file: PDF/DOCX file (required)
-- analysis_type: "standard" (default)
+- file: PDF/DOCX/TXT file (optional)
+- text: Plain text input (optional)
 
 Response:
 {
-  "summary": "AI-generated summary",
+  "filename": "contract.pdf",
+  "file_type": "PDF",
+  "summary": "AI-generated summary...",
   "risks": [
     {
       "clause_text": "Redacted clause...",
@@ -220,23 +235,81 @@ Response:
       "risk_explanation": "Explanation..."
     }
   ],
-  "fairness_score": 65,
+  "suggestions": [
+    "AI-generated contextual suggestions..."
+  ],
   "pii_redacted": true,
   "redacted_document_text": "Full redacted text..."
 }
 ```
 
-#### 2. Analyze Clauses (Detailed)
+#### 2. Analyze Document (Async) - Non-blocking
+```http
+POST /analyze-file-async
+Content-Type: multipart/form-data
+
+Parameters:
+- file: PDF/DOCX/TXT file (required)
+- documentTitle: string (required)
+- analysisType: "standard" or "detailed" (default: "standard")
+- userId: Firebase user ID (required)
+
+Response:
+{
+  "success": true,
+  "message": "File uploaded successfully. Analysis in progress...",
+  "jobId": "uuid-v4-job-id",
+  "status": "pending",
+  "estimatedTime": "30-60 seconds",
+  "documentTitle": "My Contract",
+  "fileType": "pdf"
+}
+```
+
+#### 3. Check Job Status
+```http
+GET /job-status/{job_id}?user_id={firebase_user_id}
+
+Response:
+{
+  "jobId": "uuid-v4-job-id",
+  "status": "completed",  // pending, processing, completed, failed
+  "documentTitle": "My Contract",
+  "resultAnalysisId": "firestore-doc-id",
+  "processingTimeSeconds": 45.2
+}
+```
+
+#### 4. Get Analysis Results
+```http
+GET /analysis-result/{analysis_id}?user_id={firebase_user_id}
+
+Response:
+{
+  "filename": "contract.pdf",
+  "file_type": "PDF",
+  "summary": "AI-generated summary...",
+  "risks": [...],
+  "recommendations": [...],
+  "pii_redacted": true,
+  "redacted_document_text": "..."
+}
+```
+
+#### 5. Analyze Clauses (Detailed)
 ```http
 POST /analyze-clauses
 Content-Type: multipart/form-data
 
 Parameters:
-- file: PDF/DOCX file (required)
-- analysis_type: "detailed"
+- file: PDF/DOCX/TXT file (optional)
+- text: Plain text input (optional)
 
 Response:
 {
+  "filename": "contract.pdf",
+  "file_type": "PDF",
+  "total_risky_clauses": 5,
   "clauses": [
     {
       "clause": "Original clause text...",
@@ -246,13 +319,13 @@ Response:
       "explanation": "Detailed explanation..."
     }
   ],
-  "total_risky_clauses": 5,
-  "fairness_score": 65,
   "pii_redacted": true
 }
 ```
 
-#### 3. Chat with Document
+### Chat & Interaction Endpoints
+
+#### 6. Role-Aware Chat
 ```http
 POST /chat
 Content-Type: application/json
@@ -260,37 +333,60 @@ Content-Type: application/json
 Body:
 {
   "document_text": "Redacted document content...",
-  "question": "What are the termination clauses?"
+  "message": "What are the termination clauses?",
+  "analysis_id": "optional-firestore-id",
+  "user_role": "Tenant",  // optional, will be discovered if not provided
+  "conversation_history": [
+    {"sender": "user", "text": "Previous question"},
+    {"sender": "assistant", "text": "Previous answer"}
+  ]
 }
 
 Response:
 {
-  "answer": "AI-generated answer based on document context..."
+  "reply": "AI-generated answer based on role and context...",
+  "identified_role": "Tenant",
+  "needs_role_input": false,
+  "intent": "analysis"  // retrieval, analysis, or general
 }
 ```
 
 ### Email & Negotiation Endpoints
 
-#### 4. Draft Negotiation Email
+#### 7. Draft Negotiation Email
 ```http
 POST /draft-negotiation
 Content-Type: application/json
 
 Body:
 {
-  "clause": "Unfair clause text...",
-  "risk_level": "High",
-  "explanation": "Why this is risky..."
+  "clause": "Unfair clause text..."
 }
 
 Response:
 {
-  "email_subject": "Concern Regarding Contract Terms",
-  "email_body": "Professional negotiation email text..."
+  "negotiation_email": "Professional email body text..."
 }
 ```
 
-#### 5. Send PDF Document Review
+#### 8. Generate Document Review Email
+```http
+POST /draft-document-email
+Content-Type: application/json
+
+Body:
+{
+  "document_summary": "Summary text...",
+  "risk_summary": "Risk analysis..."
+}
+
+Response:
+{
+  "document_email": "Professional email body text..."
+}
+```
+
+#### 9. Send PDF Document Review via Email
 ```http
 POST /send-document-review
 Content-Type: application/json
@@ -317,15 +413,84 @@ Response:
 }
 ```
 
-### Utility Endpoints
+### Translation Endpoints
 
-#### 6. Health Check
+#### 10. Get Supported Languages
 ```http
-GET /
-Response: {"message": "LexiGuard Backend API is running"}
+GET /supported-languages
+
+Response:
+{
+  "total_languages": 100,
+  "languages": [
+    {"code": "es", "name": "Spanish"},
+    {"code": "fr", "name": "French"},
+    ...
+  ],
+  "categories": {
+    "Asian": [...],
+    "European": [...],
+    "Indian": [...]
+  }
+}
 ```
 
-#### 7. Interactive API Docs
+#### 11. Translate Analysis
+```http
+POST /translate/{analysis_id}?language=es&user_id={firebase_user_id}
+
+Response:
+{
+  "language": "es",
+  "language_name": "Spanish",
+  "translated_content": {
+    "summary": "Resumen traducido...",
+    "risks": [...],
+    "clauses": [...],
+    "suggestions": [...]
+  }
+}
+```
+
+#### 12. Translation Statistics
+```http
+GET /translation-stats/{analysis_id}
+
+Response:
+{
+  "analysis_id": "firestore-doc-id",
+  "available_translations": ["es", "fr", "hi"],
+  "remaining_languages": 97
+}
+```
+
+### Utility Endpoints
+
+#### 13. Health Check
+```http
+GET /
+
+Response:
+{
+  "message": "LexiGuard API is running successfully 🚀"
+}
+```
+
+#### 14. Test Gemini API
+```http
+GET /test-gemini
+
+Response:
+{
+  "status": "success",
+  "message": "Gemini API is working correctly",
+  "api_key_configured": true,
+  "model_name": "models/gemini-2.5-flash",
+  "test_response": "Gemini API is working correctly."
+}
+```
+
+#### 15. Interactive API Documentation
 ```http
 GET /docs
 ```
@@ -362,12 +527,22 @@ Original:  "Contact John Doe at john@email.com"
 Redacted:  "Contact [PERSON_NAME] at [EMAIL_ADDRESS]"
 ```
 
+### Role-Aware Chat System
+
+The backend implements intelligent role discovery and persona-based responses:
+
+1. **Role Discovery**: Automatically detects user's role (Tenant, Employee, Borrower, etc.)
+2. **Role Persistence**: Saves role to Firestore for future conversations
+3. **Intent Routing**: Classifies queries as Retrieval, Analysis, or General
+4. **Persona-Based Responses**: Tailors answers based on user's role perspective
+
 ### Security Best Practices
 
 - ✅ Environment variables for sensitive data (never hardcoded)
 - ✅ Virtual environment isolation (`.venv`)
 - ✅ CORS configured for trusted origins only
-- ✅ File upload validation (type, size limits)
+- ✅ Firebase user ID verification for all protected endpoints
+- ✅ File upload validation (type, size limits - 10MB max)
 - ✅ Automatic cleanup of temporary files
 - ✅ HTTPS for all production deployments
 
@@ -383,17 +558,31 @@ Redacted:  "Contact [PERSON_NAME] at [EMAIL_ADDRESS]"
    ```
 
 2. **Open interactive docs**
-   - Browser: http://localhost:8000/docs
-   - Try "POST /analyze-file" with sample document
-   - Verify response includes redacted text
+   - Browser: http://localhost:8080/docs
+   - Try endpoints with sample data
+   - Verify responses
 
-### Test with curl
+### Test Gemini API Connection
 
 ```bash
-curl -X POST "http://localhost:8000/analyze-file" \
+curl http://localhost:8080/test-gemini
+```
+
+Expected response:
+```json
+{
+  "status": "success",
+  "message": "Gemini API is working correctly",
+  "model_name": "models/gemini-2.5-flash"
+}
+```
+
+### Test Document Analysis
+
+```bash
+curl -X POST "http://localhost:8080/analyze-file" \
   -H "Content-Type: multipart/form-data" \
-  -F "file=@sample_contract.txt" \
-  -F "analysis_type=standard"
+  -F "file=@sample_contract.txt"
 ```
 
 ---
@@ -407,7 +596,7 @@ curl -X POST "http://localhost:8000/analyze-file" \
 docker build -t lexiguard-backend .
 
 # Test locally
-docker run -p 8000:8000 \
+docker run -p 8080:8080 \
   -e GOOGLE_API_KEY=your_key \
   -e GOOGLE_CLOUD_PROJECT=your_project \
   lexiguard-backend
@@ -424,11 +613,26 @@ gcloud run deploy lexiguard-backend \
   --allow-unauthenticated \
   --set-env-vars GOOGLE_API_KEY=your_key \
   --set-env-vars GOOGLE_CLOUD_PROJECT=your_project \
+  --set-env-vars GCS_BUCKET_NAME=lexiguard-documents \
   --memory 2Gi \
-  --timeout 300
+  --timeout 300 \
+  --port 8080
 ```
 
-### Step 3: Configure CORS for Frontend
+### Step 3: Set Environment Variables Securely
+
+```bash
+# Create secrets in Secret Manager
+gcloud secrets create gmail-app-password --data-file=- <<< "your_app_password"
+
+# Deploy with secrets
+gcloud run deploy lexiguard-backend \
+  --update-secrets GMAIL_APP_PASSWORD=gmail-app-password:latest \
+  --set-env-vars GOOGLE_API_KEY=your_key \
+  --set-env-vars GMAIL_SENDER_EMAIL=your_email
+```
+
+### Step 4: Configure CORS for Frontend
 
 Update `main.py` to allow your frontend domain:
 
@@ -471,6 +675,7 @@ pip install -r requirements.txt
 1. Verify API key is correct in `.env`
 2. Check if Gemini API is enabled: [AI Studio](https://makersuite.google.com/)
 3. Ensure billing is enabled on Google Cloud project
+4. Test with `/test-gemini` endpoint
 
 ### Issue: "Cloud DLP Permission Denied"
 
@@ -478,6 +683,7 @@ pip install -r requirements.txt
 1. Verify Service Account has "Cloud DLP User" role
 2. Check `GOOGLE_APPLICATION_CREDENTIALS` path is correct
 3. Ensure DLP API is enabled in Cloud Console
+4. Verify project ID matches in `.env`
 
 ### Issue: "Email Sending Failed"
 
@@ -485,13 +691,22 @@ pip install -r requirements.txt
 1. Verify `GMAIL_SENDER_EMAIL` and `GMAIL_APP_PASSWORD` in `.env`
 2. Ensure App Password (not regular password) is used
 3. Check 2-Step Verification is enabled on Google Account
+4. Test SMTP connection manually
+
+### Issue: "Async Job Not Processing"
+
+**Solutions:**
+1. Verify Cloud Storage bucket exists: `gsutil ls gs://lexiguard-documents`
+2. Check Pub/Sub topic created: `gcloud pubsub topics list`
+3. Verify Cloud Function is deployed for job processing
+4. Check Firestore security rules allow job writes
 
 ### Issue: Port Already in Use
 
 **Windows:**
 ```powershell
-# Find process using port 8000
-netstat -ano | findstr :8000
+# Find process using port 8080
+netstat -ano | findstr :8080
 
 # Kill the process (replace PID)
 taskkill /PID <process_id> /F
@@ -500,19 +715,16 @@ taskkill /PID <process_id> /F
 **Linux/Mac:**
 ```bash
 # Find and kill process
-lsof -ti:8000 | xargs kill -9
+lsof -ti:8080 | xargs kill -9
 ```
 
-### Issue: Virtual Environment Not Activating
+### Issue: "Translation Failed"
 
-```bash
-# Enable script execution (Windows only)
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-# Activate venv
-.\.venv\Scripts\Activate.ps1  # Windows
-source .venv/bin/activate     # Linux/Mac
-```
+**Solutions:**
+1. Verify Translation API is enabled
+2. Check Service Account has "Cloud Translation API User" role
+3. Verify language code is supported (use `/supported-languages`)
+4. Check Firestore permissions for caching translations
 
 ---
 
@@ -525,24 +737,29 @@ source .venv/bin/activate     # Linux/Mac
 └──────┬──────┘
        │ HTTP/JSON
        ▼
-┌──────────────────────────────────────────┐
-│     FastAPI Backend (Port 8000)          │
-│                                          │
-│  ┌────────────┐  ┌──────────────────┐  │
-│  │  FastAPI   │  │  Gemini AI       │  │
-│  │  Routes    │→ │  Analysis        │  │
-│  └────────────┘  └──────────────────┘  │
-│         ↓                                │
-│  ┌────────────┐  ┌──────────────────┐  │
-│  │  Cloud     │  │  Cloud Firestore │  │
-│  │  DLP       │  │  Storage         │  │
-│  └────────────┘  └──────────────────┘  │
-│         ↓                ↓               │
-│  ┌────────────┐  ┌──────────────────┐  │
-│  │  Gmail     │  │  Cloud Storage   │  │
-│  │  SMTP      │  │  (GCS)           │  │
-│  └────────────┘  └──────────────────┘  │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│     FastAPI Backend (Port 8080)                  │
+│                                                  │
+│  ┌────────────┐  ┌──────────────────────────┐  │
+│  │  FastAPI   │  │  Gemini 2.5 Flash        │  │
+│  │  Routes    │→ │  AI Analysis             │  │
+│  └────────────┘  └──────────────────────────┘  │
+│         ↓                                        │
+│  ┌────────────┐  ┌──────────────────────────┐  │
+│  │  Cloud     │  │  Cloud Firestore         │  │
+│  │  DLP       │  │  (Analyses, Jobs)        │  │
+│  └────────────┘  └──────────────────────────┘  │
+│         ↓                ↓                       │
+│  ┌────────────┐  ┌──────────────────────────┐  │
+│  │  Cloud     │  │  Cloud Storage (GCS)     │  │
+│  │  Translate │  │  (Document Uploads)      │  │
+│  └────────────┘  └──────────────────────────┘  │
+│         ↓                ↓                       │
+│  ┌────────────┐  ┌──────────────────────────┐  │
+│  │  Gmail     │  │  Cloud Pub/Sub           │  │
+│  │  SMTP      │  │  (Async Processing)      │  │
+│  └────────────┘  └──────────────────────────┘  │
+└──────────────────────────────────────────────────┘
 ```
 
 ---
@@ -582,23 +799,28 @@ MIT License - See LICENSE file for details
 - [ ] Gemini API key obtained and added
 - [ ] Service Account JSON downloaded
 - [ ] Gmail App Password generated
-- [ ] Google Cloud APIs enabled
+- [ ] Google Cloud APIs enabled (DLP, Translation, Firestore, Storage, Pub/Sub)
+- [ ] Cloud Storage bucket created
 
 **Testing:**
-- [ ] Backend starts without errors
+- [ ] Backend starts without errors on port 8080
 - [ ] Interactive docs accessible at `/docs`
+- [ ] `/test-gemini` endpoint returns success
 - [ ] Can upload and analyze sample document
 - [ ] PII redaction working (check logs)
 - [ ] Chat feature responds correctly
 - [ ] Email generation works
 - [ ] PDF email sends successfully
+- [ ] Translation works for supported languages
+- [ ] Async job processing works (if configured)
 
 **Deployment:**
 - [ ] Dockerfile builds successfully
 - [ ] Cloud Run deployment successful
-- [ ] Environment variables set in Cloud Run
+- [ ] Environment variables/secrets set in Cloud Run
 - [ ] CORS configured for frontend domain
 - [ ] SSL/HTTPS enabled
+- [ ] Monitoring and logging configured
 
 ---
 
