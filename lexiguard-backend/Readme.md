@@ -192,24 +192,28 @@ gsutil cors set cors.json gs://lexiguard-documents
 
 ```
 lexiguard-backend/
-├── main.py                      # FastAPI application (main entry)
-├── requirements.txt             # Python dependencies
-├── .env                         # Environment variables (create this!)
-├── .env.example                 # Environment template
-├── Dockerfile                   # Container configuration
 ├── .dockerignore
+├── .env.example                 # Environment template
+├── .gcloudignore
 ├── .gitignore
+├── Dockerfile                   # Container configuration
+├── Readme.md                    # This file
+├── requirements.txt             # Python dependencies
+├── package.json
+├── package-lock.json
 │
+├── main.py                      # FastAPI application (main entry)
+├── app.py                       # Alternative app entry point
+├── server.js                    # Node.js server (if applicable)
 ├── translation_utils.py         # Translation service utilities
-├── dlp_processor.py             # PII redaction logic (optional)
-├── gemini_analyzer.py           # Gemini AI integration (optional)
-├── worker.py                    # Background job processor
+├── check_models.py              # Model validation utilities
 │
 └── uploads/                     # Temporary file storage (auto-created)
 ```
 
----
+**Note:** Some files like `dlp_processor.py`, `gemini_analyzer.py`, and `worker.py` have been moved to the `cloud-run-worker/` directory for dedicated async processing. The main backend focuses on synchronous API endpoints and coordination.
 
+---
 ## 🔌 API Endpoints
 
 ### Core Analysis Endpoints
