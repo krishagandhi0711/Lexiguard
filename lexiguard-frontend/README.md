@@ -239,52 +239,97 @@ Firestore will prompt you to create an index when you first query. Or create man
 4. Paste values into your `.env` file
 
 ---
-
 ## 📂 Project Structure
 
 ```
 lexiguard-frontend/
+├── .gcloudignore
+├── .gitignore
+├── Dockerfile
+├── README.md
+├── package.json
+├── package-lock.json
+├── jsconfig.json
+├── postcss.config.js
+├── tailwind.config.js
+│
 ├── public/
 │   ├── favicon.ico
 │   ├── index.html
-│   └── manifest.json
+│   ├── logo192.png
+│   ├── logo512.png
+│   ├── manifest.json
+│   └── robots.txt
 │
-├── src/
-│   ├── components/              # Reusable UI components
-│   │   ├── ui/                 # shadcn/ui components
-│   │   ├── home/               # Homepage sections
-│   │   ├── BackToTop.jsx
-│   │   ├── FairnessScore.js
-│   │   ├── LanguageSelector.jsx
-│   │   ├── Layout.jsx
-│   │   ├── ProtectedRoute.jsx
-│   │   └── ...
-│   │
-│   ├── contexts/
-│   │   └── AuthContext.jsx     # Firebase authentication context
-│   │
-│   ├── firebase/
-│   │   └── config.js           # Firebase configuration
-│   │
-│   ├── pages/                  # Main application pages
-│   │   ├── Home.jsx
-│   │   ├── Login.jsx
-│   │   ├── Upload.jsx
-│   │   ├── Results.jsx
-│   │   ├── Dashboard.jsx
-│   │   └── ...
-│   │
-│   ├── services/
-│   │   └── firestoreService.js # Firestore CRUD operations
-│   │
-│   ├── App.js                  # Main app component
-│   └── index.js                # Entry point
-│
-├── .env                        # Environment variables (create this!)
-├── .env.example                # Environment template
-├── package.json
-├── tailwind.config.js
-└── README.md                   # This file
+└── src/
+    ├── App.js                      # Main app component
+    ├── App.css
+    ├── App.test.js
+    ├── index.js                    # Entry point
+    ├── index.css
+    ├── logo.svg
+    ├── reportWebVitals.js
+    ├── setupTests.js
+    ├── utils.js
+    │
+    ├── components/                 # Reusable UI components
+    │   ├── BackToTop.jsx
+    │   ├── FairnessScore.js
+    │   ├── JobStatusTracker.jsx
+    │   ├── LanguageSelector.jsx
+    │   ├── Layout.jsx
+    │   ├── MarkdownRenderer.jsx
+    │   ├── NegotiationAssistant.js
+    │   ├── ProtectedRoute.jsx
+    │   ├── RoleAwareChatAgent.jsx
+    │   │
+    │   ├── home/                   # Homepage sections
+    │   │   ├── DemoSection.jsx
+    │   │   ├── FeaturesSection.jsx
+    │   │   └── HeroSection.jsx
+    │   │
+    │   └── ui/                     # shadcn/ui components
+    │       ├── accordion.jsx
+    │       ├── animated-counter.jsx
+    │       ├── badge.jsx
+    │       ├── button.jsx
+    │       ├── card.jsx
+    │       ├── input.jsx
+    │       ├── label.jsx
+    │       ├── select.jsx
+    │       └── textarea.jsx
+    │
+    ├── contexts/
+    │   └── AuthContext.jsx         # Firebase authentication context
+    │
+    ├── data/
+    │   └── lawyers.json            # Lawyer directory data
+    │
+    ├── firebase/
+    │   └── config.js               # Firebase configuration
+    │
+    ├── integrations/
+    │   └── Core.js                 # Core integration utilities
+    │
+    ├── pages/                      # Main application pages
+    │   ├── About.jsx
+    │   ├── ChatWithDocument.jsx
+    │   ├── Contact.jsx
+    │   ├── Dashboard.jsx
+    │   ├── FAQ.jsx
+    │   ├── Glossary.jsx
+    │   ├── Home.jsx
+    │   ├── JobResults.jsx
+    │   ├── LawyerDirectory.jsx
+    │   ├── Login.jsx
+    │   ├── Results.jsx
+    │   ├── Upload.jsx
+    │   ├── dhriti_pic.jpg
+    │   ├── kavya_pic.jpg
+    │   └── krisha.jpg
+    │
+    └── services/
+        └── firestoreService.js     # Firestore CRUD operations
 ```
 
 ---
