@@ -179,12 +179,6 @@ For **complete setup instructions, API documentation, and deployment guides**:
 
 ---
 
-## 📄 License
-
-MIT License – See [LICENSE](./LICENSE) file for details
-
----
-
 **Built with care to make legal documents accessible to everyone**
 
-*Last Updated: November 2025*
+*Last Updated: October 2025*
