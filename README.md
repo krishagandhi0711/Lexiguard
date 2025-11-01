@@ -1,10 +1,10 @@
-# LexiGuard – AI-Powered Legal Document Assistant
+# ⚖️ LexiGuard – AI-Powered Legal Document Assistant
 
 LexiGuard is a comprehensive platform that **democratizes legal understanding** by transforming complex contracts into **clear, actionable insights**. Built with cutting-edge AI and cloud-native architecture, it empowers users to navigate legal documents with confidence.
 
 ---
 
-## What LexiGuard Does
+## 🌟 What LexiGuard Does
 
 - **Intelligent Analysis** – Two modes (Standard & Detailed) for quick overviews or clause-by-clause breakdowns
 - **Risk Detection** – Automatic flagging of unfair clauses with High/Medium/Low severity levels
@@ -20,7 +20,7 @@ LexiGuard is a comprehensive platform that **democratizes legal understanding** 
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 ### Frontend (React + TailwindCSS)
 Modern, responsive web application with document upload, dual analysis modes, interactive chat, negotiation assistant, PDF reports, analytics dashboard, multi-language support, and Firebase authentication.
@@ -37,7 +37,7 @@ Cloud-native deployment with Cloud Functions for Pub/Sub publishing, dedicated C
 
 ---
 
-## Project Structure
+## 📂 Project Structure
 
 ```
 lexiguard/
@@ -143,12 +143,12 @@ lexiguard/
 ```
 
 For **complete setup instructions, API documentation, and deployment guides**:
-- **[Frontend README](./lexiguard-frontend/README.md)** – React app configuration, Firebase setup, features, and troubleshooting
-- **[Backend README](./lexiguard-backend/Readme.md)** – FastAPI setup, Google Cloud integration, API reference, and deployment
+- 📖 **[Frontend README](./lexiguard-frontend/README.md)** – React app configuration, Firebase setup, features, and troubleshooting
+- 📖 **[Backend README](./lexiguard-backend/README.md)** – FastAPI setup, Google Cloud integration, API reference, and deployment
 
 ---
 
-## Live Deployments
+## 🚀 Live Deployments
 
 | Service | URL |
 |---------|-----|
@@ -158,7 +158,7 @@ For **complete setup instructions, API documentation, and deployment guides**:
 
 ---
 
-## Technology Stack
+## 🛠️ Technology Stack
 
 | Category | Technologies |
 |----------|-------------|
@@ -171,7 +171,7 @@ For **complete setup instructions, API documentation, and deployment guides**:
 
 ---
 
-## Team
+## 👥 Team
 
 - Dhriti Gandhi
 - Krisha Gandhi
@@ -179,7 +179,7 @@ For **complete setup instructions, API documentation, and deployment guides**:
 
 ---
 
-## License
+## 📄 License
 
 MIT License – See [LICENSE](./LICENSE) file for details
 
