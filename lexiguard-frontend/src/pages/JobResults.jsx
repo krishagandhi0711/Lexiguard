@@ -99,39 +99,57 @@ export default function JobResults() {
   }, [jobId, userId]);
 
   // Fetch full analysis results and navigate to results page
-  const fetchAndNavigateToResults = async (analysisId) => {
-    try {
-      console.log(`📥 Fetching analysis results: ${analysisId}`);
-      
-      const url = `${API_BASE_URL}/analysis-result/${analysisId}?user_id=${userId}`;
-      console.log('🔗 API URL:', url);
-      
-      const res = await fetch(url);
+const fetchAndNavigateToResults = async (analysisId) => {
+  try {
+    console.log(`📥 Fetching analysis results: ${analysisId}`);
+    
+    const url = `${API_BASE_URL}/analysis-result/${analysisId}?user_id=${userId}`;
+    console.log('🔗 API URL:', url);
+    
+    const res = await fetch(url);
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      console.log('✅ Analysis results fetched:', data);
-
-      // Navigate to results page with full data
-      setTimeout(() => {
-        navigate(`/results/${analysisId}`, {
-          state: {
-            analysis: data,
-            analysisType: analysisType || data.analysisType,
-            analysisId: analysisId
-          }
-        });
-      }, 1500); // 1.5s delay to show completion animation
-      
-    } catch (err) {
-      console.error('❌ Error fetching analysis results:', err);
-      setError(`Failed to load results: ${err.message}`);
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || `HTTP ${res.status}`);
     }
-  };
+
+    const data = await res.json();
+    console.log('✅ Analysis results fetched:', data);
+    console.log('🔍 Analysis type from backend:', data.analysisType);
+    console.log('🔍 Has clauses array:', !!(data.clauses));
+    console.log('🔍 Clauses count:', data.clauses?.length || 0);
+    console.log('🔍 Total risky clauses:', data.total_risky_clauses);
+
+    // Determine correct analysis type
+    let finalAnalysisType = data.analysisType || analysisType;
+    
+    // If backend says "detailed" or has detailed clause structure, use that
+    if (data.analysisType === "detailed" || data.analysisType === "clauses") {
+      finalAnalysisType = "detailed";
+    } else if (data.total_risky_clauses !== undefined || 
+               (data.clauses && data.clauses.length > 0)) {
+      // Has detailed clause analysis indicators
+      finalAnalysisType = "detailed";
+    }
+
+    console.log('🎯 Final analysis type being passed:', finalAnalysisType);
+
+    // Navigate to results page with full data
+    setTimeout(() => {
+      navigate(`/results/${analysisId}`, {
+        state: {
+          analysis: data,
+          analysisType: finalAnalysisType,  // Use determined type
+          analysisId: analysisId
+        }
+      });
+    }, 1500); // 1.5s delay to show completion animation
+    
+  } catch (err) {
+    console.error('❌ Error fetching analysis results:', err);
+    setError(`Failed to load results: ${err.message}`);
+  }
+};
 
   const handleComplete = () => {
     console.log('🎉 Analysis complete callback triggered');

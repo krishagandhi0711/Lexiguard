@@ -153,11 +153,45 @@ export default function Results() {
   const state = location.state?.analysis;
   if (state) {
     console.log("📦 Initial analysis from location.state:", state);
+    
+    // 🔧 CRITICAL FIX: Transform the data immediately when loading from navigation state
+    if (state.analysisType === "detailed" || state.analysisType === "clauses") {
+      // Check if we need to convert risks to clauses
+      if ((!state.clauses || state.clauses.length === 0) && state.risks && state.risks.length > 0) {
+        console.log("🔄 Converting risks to clauses format in initial state");
+        console.log(`   Converting ${state.risks.length} risks...`);
+        
+        const convertedClauses = state.risks.map((risk, index) => {
+          const clause = {
+            clause: risk.clause_text || risk.clause || "",
+            risk_level: risk.severity || risk.risk_level || "Medium",
+            impact: risk.impact || `This clause poses a ${risk.severity || 'Medium'} risk to your rights and obligations.`,
+            recommendation: risk.recommendation || "Review this clause carefully and consider requesting modifications or clarifications before signing.",
+            explanation: risk.risk_explanation || risk.explanation || ""
+          };
+          
+          if (index === 0) {
+            console.log("   Sample converted clause:", clause);
+          }
+          
+          return clause;
+        });
+        
+        console.log(`✅ Successfully converted ${convertedClauses.length} risks to clauses in initial state`);
+        
+        return {
+          ...state,
+          clauses: convertedClauses,
+          total_risky_clauses: convertedClauses.length
+        };
+      }
+    }
   }
   return state || null;
 });
-  const [analysisType, setAnalysisType] = useState(location.state?.analysisType || null);
-  const [loading, setLoading] = useState(false);
+
+const [analysisType, setAnalysisType] = useState(location.state?.analysisType || null);
+const [loading, setLoading] = useState(false);
 
   const [selectedClauseForNegotiation, setSelectedClauseForNegotiation] = useState(null);
   const [negotiationEmail, setNegotiationEmail] = useState("");
@@ -177,11 +211,49 @@ export default function Results() {
   const [translatedContent, setTranslatedContent] = useState(null);
   const [translationLoading, setTranslationLoading] = useState(false);
 
-  useEffect(() => {
-    if (analysisId && currentUser && !analysis) {
-      loadAnalysisFromFirestore();
+ // Keep your existing useEffect for loading from Firestore
+useEffect(() => {
+  if (analysisId && currentUser && !analysis) {
+    loadAnalysisFromFirestore();
+  }
+}, [analysisId, currentUser]);
+
+// ADD this new useEffect to handle updates from navigation state
+useEffect(() => {
+  if (location.state?.analysis) {
+    const state = location.state.analysis;
+    console.log("🔄 Checking if navigation state needs conversion:", {
+      analysisType: state.analysisType,
+      hasClausesArray: !!(state.clauses),
+      clausesLength: state.clauses?.length || 0,
+      hasRisksArray: !!(state.risks),
+      risksLength: state.risks?.length || 0
+    });
+    
+    // If analysis type is detailed but clauses array is empty/missing, convert risks
+    if ((state.analysisType === "detailed" || state.analysisType === "clauses")) {
+      if ((!state.clauses || state.clauses.length === 0) && state.risks && state.risks.length > 0) {
+        console.log("🔄 Navigation state needs conversion - updating analysis");
+        
+        const convertedClauses = state.risks.map((risk, index) => ({
+          clause: risk.clause_text || risk.clause || "",
+          risk_level: risk.severity || risk.risk_level || "Medium",
+          impact: risk.impact || `This clause poses a ${risk.severity || 'Medium'} risk to your rights and obligations.`,
+          recommendation: risk.recommendation || "Review this clause carefully and consider requesting modifications or clarifications before signing.",
+          explanation: risk.risk_explanation || risk.explanation || ""
+        }));
+        
+        setAnalysis(prev => ({
+          ...prev,
+          clauses: convertedClauses,
+          total_risky_clauses: convertedClauses.length
+        }));
+        
+        console.log(`✅ Updated analysis with ${convertedClauses.length} converted clauses`);
+      }
     }
-  }, [analysisId, currentUser]);
+  }
+}, [location.state]);
   useEffect(() => {
   // Reset to English whenever we load a new analysis
   setSelectedLanguage('en');
@@ -241,29 +313,101 @@ const loadAnalysisFromFirestore = async () => {
       console.log("  No suggestions found or empty array");
     }
     
-    const transformedAnalysis = {
-      filename: analysisData.originalFilename,
-      file_type: analysisData.fileType,
-      summary: analysisData.summary,
-      risks: analysisData.risks || [],
-      clauses: analysisData.clauses || [],
-      total_risky_clauses: analysisData.total_risky_clauses,
-      pii_redacted: analysisData.piiRedacted,
-      redacted_text: analysisData.redactedDocumentText,
-      redacted_document_text: analysisData.redactedDocumentText,
-      suggestions: analysisData.suggestions || analysisData.suggested_actions || analysisData.recommendations || [],
-      fairness_analysis: analysisData.fairness_analysis || [],
-      privacy_notice: analysisData.piiRedacted ? "✓ Your Personal Data Has Been Redacted for Privacy." : null,
-    };
+// REPLACE your transformedAnalysis block in loadAnalysisFromFirestore (around line 275)
+// with this fixed version:
+
+const transformedAnalysis = {
+  filename: analysisData.originalFilename,
+  file_type: analysisData.fileType,
+  summary: analysisData.summary,
+  risks: analysisData.risks || [],
+  
+  // 🔧 FIXED: Convert standard risks to detailed clauses format when analysisType is "detailed"
+  clauses: (() => {
+    // Priority 1: If we already have properly formatted clauses, use them
+    if (analysisData.clauses && Array.isArray(analysisData.clauses) && analysisData.clauses.length > 0) {
+      const firstClause = analysisData.clauses[0];
+      // Verify it has detailed structure
+      if (firstClause.risk_level && firstClause.impact && firstClause.recommendation && firstClause.explanation) {
+        console.log("✅ Using existing clauses array with detailed structure");
+        return analysisData.clauses;
+      }
+    }
     
-    console.log("✅ Transformed analysis:", transformedAnalysis);
-    console.log("📊 Risk count:", transformedAnalysis.risks?.length || 0);
-    console.log("📊 Clause count:", transformedAnalysis.clauses?.length || 0);
+    // Priority 2: If analysisType is "detailed" and we have risks, convert them
+    if ((analysisData.analysisType === "detailed" || analysisData.analysisType === "clauses")) {
+      if (analysisData.risks && Array.isArray(analysisData.risks) && analysisData.risks.length > 0) {
+        console.log("🔄 Converting standard risks to detailed clauses format");
+        console.log(`   Converting ${analysisData.risks.length} risks to clauses...`);
+        
+        const converted = analysisData.risks.map((risk, index) => {
+          // Handle both possible risk formats
+          const clauseText = risk.clause_text || risk.clause || risk.clauseText || "";
+          const riskLevel = risk.severity || risk.risk_level || risk.riskLevel || "Medium";
+          const explanation = risk.risk_explanation || risk.explanation || "";
+          
+          const clause = {
+            clause: clauseText,
+            risk_level: riskLevel,
+            impact: risk.impact || `This clause poses a ${riskLevel} risk to your rights and obligations.`,
+            recommendation: risk.recommendation || "Review this clause carefully and consider requesting modifications or clarifications before signing.",
+            explanation: explanation
+          };
+          
+          if (index === 0) {
+            console.log("   Sample converted clause:", clause);
+          }
+          
+          return clause;
+        });
+        
+        console.log(`✅ Successfully converted ${converted.length} risks to clauses`);
+        return converted;
+      }
+    }
     
-    setAnalysis(transformedAnalysis);
-    setAnalysisType(analysisData.analysisType);
-    
-    setLoading(false);
+    console.log("ℹ️ No clauses to convert (standard analysis mode)");
+    return [];
+  })(),
+  
+  // Set total_risky_clauses based on analysis type
+  total_risky_clauses: (() => {
+    if (analysisData.total_risky_clauses !== undefined) {
+      return analysisData.total_risky_clauses;
+    }
+    if (analysisData.analysisType === "detailed" || analysisData.analysisType === "clauses") {
+      // For detailed analysis, count from clauses or risks
+      if (analysisData.clauses && analysisData.clauses.length > 0) {
+        return analysisData.clauses.length;
+      }
+      if (analysisData.risks && analysisData.risks.length > 0) {
+        return analysisData.risks.length;
+      }
+    }
+    return undefined;
+  })(),
+  
+  pii_redacted: analysisData.piiRedacted,
+  redacted_text: analysisData.redactedDocumentText,
+  redacted_document_text: analysisData.redactedDocumentText,
+  suggestions: analysisData.suggestions || analysisData.suggested_actions || analysisData.recommendations || [],
+  fairness_analysis: analysisData.fairness_analysis || [],
+  privacy_notice: analysisData.piiRedacted ? "✓ Your Personal Data Has Been Redacted for Privacy." : null,
+};
+
+console.log("✅ Transformed analysis complete:", {
+  filename: transformedAnalysis.filename,
+  analysisType: analysisData.analysisType,
+  riskCount: transformedAnalysis.risks?.length || 0,
+  clauseCount: transformedAnalysis.clauses?.length || 0,
+  totalRiskyClauses: transformedAnalysis.total_risky_clauses,
+  hasClausesWithStructure: transformedAnalysis.clauses?.length > 0 && transformedAnalysis.clauses[0]?.risk_level ? true : false
+});
+
+setAnalysis(transformedAnalysis);
+setAnalysisType(analysisData.analysisType);
+
+setLoading(false);
   } catch (error) {
     console.error("Error loading analysis:", error);
     setLoading(false);
@@ -589,6 +733,51 @@ const handleLanguageChange = async (languageCode) => {
     };
     return names[code] || code;
   };
+  // 🆕 ADD THIS FUNCTION HERE (before the loading check)
+  const determineAnalysisType = (analysisData) => {
+    console.log("🔍 Determining analysis type:", {
+      analysisType: analysisData?.analysisType,
+      hasClausesField: !!(analysisData?.clauses),
+      clausesLength: analysisData?.clauses?.length || 0,
+      hasRisksField: !!(analysisData?.risks),
+      risksLength: analysisData?.risks?.length || 0,
+      totalRiskyClauses: analysisData?.total_risky_clauses
+    });
+
+    // Check 1: Explicit analysisType field
+    if (analysisData?.analysisType === "detailed" || analysisData?.analysisType === "clauses") {
+      console.log("✅ Analysis type determined by analysisType field: detailed");
+      return "detailed";
+    }
+
+    // Check 2: Has clauses array with detailed structure
+    if (analysisData?.clauses && Array.isArray(analysisData.clauses)) {
+      if (analysisData.clauses.length > 0) {
+        const firstClause = analysisData.clauses[0];
+        // Check if clause has detailed analysis structure
+        const hasDetailedStructure = 
+          firstClause?.risk_level && 
+          firstClause?.impact && 
+          firstClause?.recommendation && 
+          firstClause?.explanation;
+        
+        if (hasDetailedStructure) {
+          console.log("✅ Analysis type determined by clause structure: detailed");
+          return "detailed";
+        }
+      }
+    }
+
+    // Check 3: Has total_risky_clauses field (indicator of detailed analysis)
+    if (analysisData?.total_risky_clauses !== undefined) {
+      console.log("✅ Analysis type determined by total_risky_clauses field: detailed");
+      return "detailed";
+    }
+
+    // Default to standard
+    console.log("✅ Analysis type determined as: standard");
+    return "standard";
+  };
 
   if (loading) {
     return (
@@ -621,7 +810,19 @@ const handleLanguageChange = async (languageCode) => {
   }
 
   // const isDetailedAnalysis = analysisType === "detailed" || (analysis.clauses && Array.isArray(analysis.clauses));
-    const isDetailedAnalysis = analysisType === "detailed" || (analysis.clauses && Array.isArray(analysis.clauses) && analysis.clauses.length > 0);
+  // 🆕 REPLACE the above lines with this:
+const actualAnalysisType = determineAnalysisType(analysis);
+const isDetailedAnalysis = actualAnalysisType === "detailed";
+
+console.log("📊 Final Analysis Type Decision:", {
+  analysisType,
+  actualAnalysisType,
+  isDetailedAnalysis,
+  hasClausesArray: !!(analysis?.clauses),
+  clausesCount: analysis?.clauses?.length || 0,
+  hasRisksArray: !!(analysis?.risks),
+  risksCount: analysis?.risks?.length || 0
+});
 
   const displayedContent = getDisplayedContent();
   
